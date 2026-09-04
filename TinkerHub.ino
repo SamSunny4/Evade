@@ -1,14 +1,14 @@
 /*
  * ==============================================================================
- * TinkerHub CyberBot: Autonomous Evade Bot with Dual BTS7960B & 8 Ultrasonic Sensors
+ * TinkerHub CyberBot: Autonomous Evade Bot with 2-Channel Relay & 4 Ultrasonic Sensors
  * ==============================================================================
  * ESP32 DevKit V1 Firmware
  * Compatible with PlatformIO and Arduino IDE 2.x
  *
  * Subsystems:
- * - 8-Directional Ultrasonic Radar (Non-blocking ISR based)
+ * - 4-Directional Ultrasonic Radar (90° Spacing, Non-blocking ISR based)
  * - MPU6050 6-DOF IMU (Gyro Yaw Tracking)
- * - Dual BTS7960B 43A H-Bridge Drivers (Tank Steering)
+ * - 2-Channel Relay Actuator (Digital Left/Right Motor Switching)
  * - FreeRTOS Dual-Core Processing (Core 0: WiFi/Web/OTA, Core 1: Control/Sensors)
  * - Bi-Directional UART2 Telemetry with Raspberry Pi
  * - Cyberpunk-themed Web Admin Portal with Live Radar Visualizer & Virtual Controls
@@ -37,7 +37,7 @@ void setup() {
     Serial.begin(115200);
     delay(500);
     Serial.println("\n=======================================================");
-    Serial.println("   TINKERHUB CYBERBOT - ESP32 DUAL BTS7960B CONTROLLER ");
+    Serial.println("   TINKERHUB CYBERBOT - ESP32 2-CHANNEL RELAY CONTROLLER");
     Serial.println("=======================================================");
 
     motors.init();
@@ -69,6 +69,9 @@ void printSerialMonitorTelemetry(RobotControlMode mode, ObstacleStatus status) {
         lastReportedStatus = status;
         const char* stStr = "CLEAR";
         if (status == STATUS_OBJECT_IN_FRONT)        stStr = "OBJECT_IN_FRONT";
+        else if (status == STATUS_OBJECT_ON_LEFT)    stStr = "OBJECT_ON_LEFT";
+        else if (status == STATUS_OBJECT_ON_RIGHT)   stStr = "OBJECT_ON_RIGHT";
+        else if (status == STATUS_OBJECT_IN_REAR)    stStr = "OBJECT_IN_REAR";
         else if (status == STATUS_OBJECT_BOTH_SIDES) stStr = "OBJECT_BOTH_SIDES";
         else if (status == STATUS_ALL_SIDES_TRAPPED) stStr = "ALL_SIDES_TRAPPED";
 
@@ -88,18 +91,14 @@ void printSerialMonitorTelemetry(RobotControlMode mode, ObstacleStatus status) {
     int16_t lSpd, rSpd;
     motors.getSpeeds(lSpd, rSpd);
 
-    Serial.printf("[YAW:%+6.1f°] [%s] [MOT:L=%+4d R=%+4d] | S0(F):%5.1f S1(FR):%5.1f S2(R):%5.1f S3(BR):%5.1f S4(B):%5.1f S5(BL):%5.1f S6(L):%5.1f S7(FL):%5.1f\n",
+    Serial.printf("[YAW:%+6.1f°] [%s] [MOT:L=%+4d R=%+4d] | S0(F):%5.1f S1(R):%5.1f S2(B):%5.1f S3(L):%5.1f\n",
         imu.getYaw(),
         modeStr,
         lSpd, rSpd,
         sensors.getDistance(0),
         sensors.getDistance(1),
         sensors.getDistance(2),
-        sensors.getDistance(3),
-        sensors.getDistance(4),
-        sensors.getDistance(5),
-        sensors.getDistance(6),
-        sensors.getDistance(7)
+        sensors.getDistance(3)
     );
 }
 

@@ -7,145 +7,99 @@ MotorsManager::MotorsManager()
       currentLeftSpeed(0),
       currentRightSpeed(0),
       currentCmd(CMD_STOP),
-      eStopActive(true) {}
-
-static void writePwm(uint8_t pin, uint8_t channel, uint8_t duty) {
-#if defined(ESP_ARDUINO_VERSION_MAJOR) && (ESP_ARDUINO_VERSION_MAJOR >= 3)
-    ledcWrite(pin, duty);
-#else
-    ledcWrite(channel, duty);
-#endif
-}
+      eStopActive(true),
+      relay1State(false),
+      relay2State(false) {}
 
 void MotorsManager::init() {
-    // Setup Enable pins: Initialize in E-STOP state (LOW = disabled)
-    pinMode(PIN_L_EN, OUTPUT);
-    digitalWrite(PIN_L_EN, LOW);
+    pinMode(PIN_RELAY_1, OUTPUT);
+    pinMode(PIN_RELAY_2, OUTPUT);
 
-    pinMode(PIN_R_EN, OUTPUT);
-    digitalWrite(PIN_R_EN, LOW);
+    // Initial safe boot state: Both relays de-energized
+    digitalWrite(PIN_RELAY_1, RELAY_OFF);
+    digitalWrite(PIN_RELAY_2, RELAY_OFF);
 
+    relay1State = false;
+    relay2State = false;
     eStopActive = true;
 
-    // Setup PWM pins
-#if defined(ESP_ARDUINO_VERSION_MAJOR) && (ESP_ARDUINO_VERSION_MAJOR >= 3)
-    ledcAttach(PIN_L_RPWM, PWM_FREQ, PWM_RESOLUTION);
-    ledcAttach(PIN_L_LPWM, PWM_FREQ, PWM_RESOLUTION);
-    ledcAttach(PIN_R_RPWM, PWM_FREQ, PWM_RESOLUTION);
-    ledcAttach(PIN_R_LPWM, PWM_FREQ, PWM_RESOLUTION);
-#else
-    ledcSetup(PWM_CH_L_FWD, PWM_FREQ, PWM_RESOLUTION);
-    ledcAttachPin(PIN_L_RPWM, PWM_CH_L_FWD);
-
-    ledcSetup(PWM_CH_L_REV, PWM_FREQ, PWM_RESOLUTION);
-    ledcAttachPin(PIN_L_LPWM, PWM_CH_L_REV);
-
-    ledcSetup(PWM_CH_R_FWD, PWM_FREQ, PWM_RESOLUTION);
-    ledcAttachPin(PIN_R_RPWM, PWM_CH_R_FWD);
-
-    ledcSetup(PWM_CH_R_REV, PWM_FREQ, PWM_RESOLUTION);
-    ledcAttachPin(PIN_R_LPWM, PWM_CH_R_REV);
-#endif
-
     stop();
-    Serial.println("[Motors] Dual BTS7960B initialized in SAFETY E-STOP state.");
+    Serial.println("[RelayMotors] 2-Channel Relay Module initialized in SAFETY E-STOP state.");
 }
 
-void MotorsManager::applyLeftMotor(int16_t speed) {
+void MotorsManager::applyRelays(bool r1, bool r2) {
     if (eStopActive) {
-        writePwm(PIN_L_RPWM, PWM_CH_L_FWD, 0);
-        writePwm(PIN_L_LPWM, PWM_CH_L_REV, 0);
+        digitalWrite(PIN_RELAY_1, RELAY_OFF);
+        digitalWrite(PIN_RELAY_2, RELAY_OFF);
+        relay1State = false;
+        relay2State = false;
         currentLeftSpeed = 0;
-        return;
-    }
-    speed = constrain(speed, -255, 255);
-    currentLeftSpeed = speed;
-
-    if (speed > 0) {
-        // Forward: RPWM = speed, LPWM = 0
-        writePwm(PIN_L_RPWM, PWM_CH_L_FWD, (uint8_t)speed);
-        writePwm(PIN_L_LPWM, PWM_CH_L_REV, 0);
-    } else if (speed < 0) {
-        // Reverse: RPWM = 0, LPWM = abs(speed)
-        writePwm(PIN_L_RPWM, PWM_CH_L_FWD, 0);
-        writePwm(PIN_L_LPWM, PWM_CH_L_REV, (uint8_t)(-speed));
-    } else {
-        // Brake / Coast: RPWM = 0, LPWM = 0
-        writePwm(PIN_L_RPWM, PWM_CH_L_FWD, 0);
-        writePwm(PIN_L_LPWM, PWM_CH_L_REV, 0);
-    }
-}
-
-void MotorsManager::applyRightMotor(int16_t speed) {
-    if (eStopActive) {
-        writePwm(PIN_R_RPWM, PWM_CH_R_FWD, 0);
-        writePwm(PIN_R_LPWM, PWM_CH_R_REV, 0);
         currentRightSpeed = 0;
         return;
     }
-    speed = constrain(speed, -255, 255);
-    currentRightSpeed = speed;
 
-    if (speed > 0) {
-        // Forward: RPWM = speed, LPWM = 0
-        writePwm(PIN_R_RPWM, PWM_CH_R_FWD, (uint8_t)speed);
-        writePwm(PIN_R_LPWM, PWM_CH_R_REV, 0);
-    } else if (speed < 0) {
-        // Reverse: RPWM = 0, LPWM = abs(speed)
-        writePwm(PIN_R_RPWM, PWM_CH_R_FWD, 0);
-        writePwm(PIN_R_LPWM, PWM_CH_R_REV, (uint8_t)(-speed));
-    } else {
-        // Brake / Coast: RPWM = 0, LPWM = 0
-        writePwm(PIN_R_RPWM, PWM_CH_R_FWD, 0);
-        writePwm(PIN_R_LPWM, PWM_CH_R_REV, 0);
-    }
+    relay1State = r1;
+    relay2State = r2;
+
+    digitalWrite(PIN_RELAY_1, r1 ? RELAY_ON : RELAY_OFF);
+    digitalWrite(PIN_RELAY_2, r2 ? RELAY_ON : RELAY_OFF);
+
+    currentLeftSpeed = r1 ? 255 : 0;
+    currentRightSpeed = r2 ? 255 : 0;
 }
 
 void MotorsManager::setSpeeds(int16_t leftSpeed, int16_t rightSpeed) {
-    applyLeftMotor(leftSpeed);
-    applyRightMotor(rightSpeed);
+    bool r1 = (leftSpeed > 0);
+    bool r2 = (rightSpeed > 0);
 
-    if (leftSpeed == 0 && rightSpeed == 0) currentCmd = CMD_STOP;
-    else if (leftSpeed > 0 && rightSpeed > 0) currentCmd = CMD_FORWARD;
-    else if (leftSpeed < 0 && rightSpeed < 0) currentCmd = CMD_BACKWARD;
-    else if (leftSpeed < 0 && rightSpeed > 0) currentCmd = CMD_ROTATE_LEFT;
-    else if (leftSpeed > 0 && rightSpeed < 0) currentCmd = CMD_ROTATE_RIGHT;
-    else currentCmd = CMD_FORWARD;
+    applyRelays(r1, r2);
+
+    if (!r1 && !r2) currentCmd = CMD_STOP;
+    else if (r1 && r2) currentCmd = CMD_FORWARD;
+    else if (r1 && !r2) currentCmd = CMD_ROTATE_RIGHT; // Left ON -> Turn Right
+    else if (!r1 && r2) currentCmd = CMD_ROTATE_LEFT;  // Right ON -> Turn Left
 }
 
 void MotorsManager::forward(uint8_t speed) {
+    // Both relays ON -> Move Forward
     currentCmd = CMD_FORWARD;
-    setSpeeds(speed, speed);
+    applyRelays(true, true);
 }
 
 void MotorsManager::backward(uint8_t speed) {
+    // 2-channel forward relay cannot reverse DC polarity -> safely halt
     currentCmd = CMD_BACKWARD;
-    setSpeeds(-speed, -speed);
+    applyRelays(false, false);
 }
 
 void MotorsManager::rotateLeft(uint8_t speed) {
+    // Relay 2 ON, Relay 1 OFF -> Right motors ON -> Turn Left
     currentCmd = CMD_ROTATE_LEFT;
-    setSpeeds(-speed, speed);
+    applyRelays(false, true);
 }
 
 void MotorsManager::rotateRight(uint8_t speed) {
+    // Relay 1 ON, Relay 2 OFF -> Left motors ON -> Turn Right
     currentCmd = CMD_ROTATE_RIGHT;
-    setSpeeds(speed, -speed);
+    applyRelays(true, false);
 }
 
 void MotorsManager::pivotLeft(uint8_t speed) {
+    // Relay 2 ON, Relay 1 OFF -> Turn Left
     currentCmd = CMD_PIVOT_LEFT;
-    setSpeeds(0, speed);
+    applyRelays(false, true);
 }
 
 void MotorsManager::pivotRight(uint8_t speed) {
+    // Relay 1 ON, Relay 2 OFF -> Turn Right
     currentCmd = CMD_PIVOT_RIGHT;
-    setSpeeds(speed, 0);
+    applyRelays(true, false);
 }
 
 void MotorsManager::stop() {
+    // Both relays OFF -> Halt Motion
     currentCmd = CMD_STOP;
-    setSpeeds(0, 0);
+    applyRelays(false, false);
 }
 
 void MotorsManager::setBaseSpeed(uint8_t speed) {
@@ -165,20 +119,26 @@ void MotorsManager::getSpeeds(int16_t &left, int16_t &right) const {
     right = currentRightSpeed;
 }
 
+bool MotorsManager::isRelay1On() const {
+    return relay1State;
+}
+
+bool MotorsManager::isRelay2On() const {
+    return relay2State;
+}
+
 void MotorsManager::emergencyStop() {
     eStopActive = true;
-    stop();
-    digitalWrite(PIN_L_EN, LOW);
-    digitalWrite(PIN_R_EN, LOW);
-    Serial.println("[Motors] >>> EMERGENCY STOP ACTIVATED! ALL MOTORS CUT OFF <<<");
+    applyRelays(false, false);
+    currentCmd = CMD_STOP;
+    Serial.println("[RelayMotors] >>> EMERGENCY STOP ACTIVATED! ALL RELAYS DE-ENERGIZED <<<");
 }
 
 void MotorsManager::resetEmergencyStop() {
-    digitalWrite(PIN_L_EN, HIGH);
-    digitalWrite(PIN_R_EN, HIGH);
     eStopActive = false;
-    stop();
-    Serial.println("[Motors] Emergency stop reset. Motor controls restored.");
+    applyRelays(false, false);
+    currentCmd = CMD_STOP;
+    Serial.println("[RelayMotors] Emergency stop reset. Relay controls restored.");
 }
 
 bool MotorsManager::isEmergencyStopped() const {

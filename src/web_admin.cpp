@@ -281,6 +281,115 @@ static const char INDEX_HTML[] PROGMEM = R"rawliteral(
       opacity: 0.35;
       filter: grayscale(0.8);
     }
+
+    /* ULTRASONIC RADAR COMPASS */
+    .sensor-compass {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 8px;
+      margin: 4px 0 2px 0;
+    }
+
+    .sensor-mid-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      width: 100%;
+      gap: 8px;
+    }
+
+    .sensor-node {
+      background: rgba(255, 255, 255, 0.03);
+      border: 1px solid var(--border-color);
+      border-radius: 14px;
+      padding: 8px 12px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      min-width: 104px;
+      transition: all 0.2s ease;
+    }
+
+    .sensor-node.warning {
+      border-color: #F59E0B;
+      background: rgba(245, 158, 11, 0.12);
+      box-shadow: 0 0 12px rgba(245, 158, 11, 0.3);
+    }
+
+    .sensor-node.danger {
+      border-color: var(--red-neon);
+      background: rgba(239, 68, 68, 0.2);
+      box-shadow: 0 0 16px var(--red-glow);
+      animation: pulseAlert 0.8s infinite alternate;
+    }
+
+    .sensor-dir {
+      font-size: 10px;
+      font-weight: 700;
+      letter-spacing: 1px;
+      color: var(--text-secondary);
+      text-transform: uppercase;
+    }
+
+    .sensor-val {
+      font-size: 15px;
+      font-weight: 800;
+      font-family: 'JetBrains Mono', monospace;
+      color: var(--cyan-neon);
+      margin: 2px 0;
+    }
+
+    .sensor-node.danger .sensor-val { color: var(--red-neon); }
+    .sensor-node.warning .sensor-val { color: #F59E0B; }
+
+    .sensor-meter {
+      width: 100%;
+      height: 4px;
+      background: rgba(255, 255, 255, 0.08);
+      border-radius: 2px;
+      overflow: hidden;
+      margin-top: 2px;
+    }
+
+    .meter-bar {
+      height: 100%;
+      width: 100%;
+      background: var(--cyan-neon);
+      border-radius: 2px;
+      transition: width 0.15s ease, background 0.15s ease;
+    }
+
+    .robot-center-icon {
+      position: relative;
+      width: 44px;
+      height: 44px;
+      border-radius: 50%;
+      background: rgba(0, 240, 255, 0.08);
+      border: 1px solid rgba(0, 240, 255, 0.3);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 20px;
+      flex-shrink: 0;
+    }
+
+    .robot-pulse {
+      position: absolute;
+      width: 100%;
+      height: 100%;
+      border-radius: 50%;
+      border: 1px solid var(--cyan-neon);
+      opacity: 0.4;
+      animation: ping 2s cubic-bezier(0, 0, 0.2, 1) infinite;
+    }
+
+    @keyframes ping {
+      75%, 100% {
+        transform: scale(1.6);
+        opacity: 0;
+      }
+    }
   </style>
 </head>
 <body>
@@ -304,6 +413,50 @@ static const char INDEX_HTML[] PROGMEM = R"rawliteral(
       <button class="btn-resume" id="resumeBtn" onclick="resumeEstop()" style="display: flex;">
         <span>⚡</span> RESET & RESUME MOTORS
       </button>
+    </div>
+
+    <!-- ULTRASONIC SENSOR RADAR CARD -->
+    <div class="card" id="radarCard">
+      <div class="card-title" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+        <span>4-Axis Ultrasonic Radar</span>
+        <span id="obstacleAlert" style="color: var(--emerald-neon); font-size: 11px; font-weight: 700; letter-spacing: 0.5px;">PATH CLEAR</span>
+      </div>
+
+      <div class="sensor-compass">
+        <!-- FRONT S0 -->
+        <div class="sensor-node" id="nodeFront">
+          <span class="sensor-dir">▲ FRONT</span>
+          <span class="sensor-val" id="valFront">---</span>
+          <div class="sensor-meter"><div class="meter-bar" id="barFront"></div></div>
+        </div>
+
+        <!-- MID ROW: LEFT S3, CENTER ROBOT ICON, RIGHT S1 -->
+        <div class="sensor-mid-row">
+          <div class="sensor-node" id="nodeLeft">
+            <span class="sensor-dir">◀ LEFT</span>
+            <span class="sensor-val" id="valLeft">---</span>
+            <div class="sensor-meter"><div class="meter-bar" id="barLeft"></div></div>
+          </div>
+
+          <div class="robot-center-icon">
+            <div class="robot-pulse"></div>
+            <span>🤖</span>
+          </div>
+
+          <div class="sensor-node" id="nodeRight">
+            <span class="sensor-dir">RIGHT ▶</span>
+            <span class="sensor-val" id="valRight">---</span>
+            <div class="sensor-meter"><div class="meter-bar" id="barRight"></div></div>
+          </div>
+        </div>
+
+        <!-- BACK S2 -->
+        <div class="sensor-node" id="nodeBack">
+          <div class="sensor-meter"><div class="meter-bar" id="barBack"></div></div>
+          <span class="sensor-val" id="valBack">---</span>
+          <span class="sensor-dir">▼ BACK</span>
+        </div>
+      </div>
     </div>
 
     <!-- MAIN CONTROLS CARD -->
@@ -386,6 +539,56 @@ static const char INDEX_HTML[] PROGMEM = R"rawliteral(
         document.getElementById('btnModeAuto').classList.toggle('active', activeMode === 'AUTO_EVADE');
         document.getElementById('btnModeWeb').classList.toggle('active', activeMode === 'WEB_OVERRIDE');
         document.getElementById('btnModePi').classList.toggle('active', activeMode === 'PI_OVERRIDE');
+
+        // Update 4-axis ultrasonic sensor readings
+        if (data.d && data.d.length >= 4) {
+          const thresh = data.threshold || 25;
+          const sensorsData = [
+            { id: 'Front', dist: data.d[0] },
+            { id: 'Right', dist: data.d[1] },
+            { id: 'Back',  dist: data.d[2] },
+            { id: 'Left',  dist: data.d[3] }
+          ];
+
+          let anyDanger = false;
+          let anyWarning = false;
+
+          sensorsData.forEach(s => {
+            const node = document.getElementById('node' + s.id);
+            const val = document.getElementById('val' + s.id);
+            const bar = document.getElementById('bar' + s.id);
+            const d = s.dist;
+
+            val.innerText = d >= 300 ? '> 300 cm' : d.toFixed(1) + ' cm';
+            const pct = Math.min(100, Math.max(5, (d / 150) * 100));
+            bar.style.width = pct + '%';
+
+            node.classList.remove('danger', 'warning');
+            if (d < thresh) {
+              node.classList.add('danger');
+              bar.style.background = 'var(--red-neon)';
+              anyDanger = true;
+            } else if (d < thresh * 1.5) {
+              node.classList.add('warning');
+              bar.style.background = '#F59E0B';
+              anyWarning = true;
+            } else {
+              bar.style.background = 'var(--cyan-neon)';
+            }
+          });
+
+          const alertLbl = document.getElementById('obstacleAlert');
+          if (anyDanger) {
+            alertLbl.innerText = 'OBSTACLE DETECTED';
+            alertLbl.style.color = 'var(--red-neon)';
+          } else if (anyWarning) {
+            alertLbl.innerText = 'PROXIMITY CAUTION';
+            alertLbl.style.color = '#F59E0B';
+          } else {
+            alertLbl.innerText = 'PATH CLEAR';
+            alertLbl.style.color = 'var(--emerald-neon)';
+          }
+        }
       } catch (err) {
         document.getElementById('systemBadge').innerText = 'OFFLINE';
       }
@@ -474,9 +677,16 @@ static const char INDEX_HTML[] PROGMEM = R"rawliteral(
 WebAdminManager::WebAdminManager()
     : server(WEB_SERVER_PORT),
       activeMode(MODE_WEB_OVERRIDE),
-      lastWebCmdTime(0) {}
+      lastWebCmdTime(0),
+      wifiWasConnected(false),
+      lastLedBlinkTime(0),
+      ledState(false),
+      lastDisconnectAlertTime(0) {}
 
 void WebAdminManager::init() {
+    pinMode(PIN_STATUS_LED, OUTPUT);
+    digitalWrite(PIN_STATUS_LED, LOW);
+
     Serial.println("[WiFi] Starting Access Point mode...");
     WiFi.mode(WIFI_AP);
 
@@ -531,7 +741,7 @@ void WebAdminManager::handleApiStatus() {
 #if ARDUINOJSON_VERSION_MAJOR >= 7
     JsonDocument doc;
 #else
-    StaticJsonDocument<256> doc;
+    StaticJsonDocument<384> doc;
 #endif
 
     if (activeMode == MODE_PI_OVERRIDE) doc["mode"] = "PI_OVERRIDE";
@@ -541,6 +751,11 @@ void WebAdminManager::handleApiStatus() {
     doc["estop"] = motors.isEmergencyStopped();
     doc["threshold"] = evasion.getThreshold();
     doc["speed"] = motors.getBaseSpeed();
+
+    JsonArray d = doc.createNestedArray("d");
+    for (int i = 0; i < NUM_ULTRASONIC_SENSORS; i++) {
+        d.add(round(sensors.getDistance(i) * 10.0f) / 10.0f);
+    }
 
     String response;
     serializeJson(doc, response);
@@ -663,10 +878,51 @@ void WebAdminManager::update() {
     ArduinoOTA.handle();
     server.handleClient();
 
+    uint32_t now = millis();
+    bool currentlyConnected = isConnected();
+
+    if (currentlyConnected) {
+        // WiFi connected: Blink ESP32 onboard LED (toggle every 250ms)
+        if (now - lastLedBlinkTime >= 250) {
+            lastLedBlinkTime = now;
+            ledState = !ledState;
+            digitalWrite(PIN_STATUS_LED, ledState ? HIGH : LOW);
+        }
+
+        if (!wifiWasConnected) {
+            wifiWasConnected = true;
+            motors.resetEmergencyStop();
+            Serial.printf("[WiFi] Client connected! (Active stations: %d). Emergency stop reset.\n", WiFi.softAPgetStationNum());
+        }
+    } else {
+        // WiFi disconnected: Turn OFF status LED
+        if (ledState) {
+            ledState = false;
+            digitalWrite(PIN_STATUS_LED, LOW);
+        }
+
+        // Trigger Emergency Stop when WiFi is disconnected
+        if (wifiWasConnected) {
+            wifiWasConnected = false;
+            motors.emergencyStop();
+            Serial.println("\n>>> [WIFI SAFETY] WiFi connection lost! Activating EMERGENCY STOP. <<<");
+        } else if (!motors.isEmergencyStopped() && (now - lastDisconnectAlertTime >= 3000)) {
+            lastDisconnectAlertTime = now;
+            motors.emergencyStop();
+            Serial.println(">>> [WIFI SAFETY] Waiting for WiFi connection. EMERGENCY STOP active. <<<");
+        }
+    }
+
     // Auto-stop if in Web manual override and no control input received for > 1.5s
-    if (activeMode == MODE_WEB_OVERRIDE && (millis() - lastWebCmdTime > 1500)) {
+    if (activeMode == MODE_WEB_OVERRIDE && (now - lastWebCmdTime > 1500)) {
         motors.stop();
     }
+}
+
+bool WebAdminManager::isConnected() const {
+    bool apConnected = (WiFi.getMode() & WIFI_MODE_AP) && (WiFi.softAPgetStationNum() > 0);
+    bool staConnected = (WiFi.getMode() & WIFI_MODE_STA) && (WiFi.status() == WL_CONNECTED);
+    return apConnected || staConnected;
 }
 
 RobotControlMode WebAdminManager::getActiveMode() const {

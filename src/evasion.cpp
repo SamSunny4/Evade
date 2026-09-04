@@ -54,6 +54,42 @@ void EvasionManager::executeEvadeStateMachine() {
                 currentState = STATE_TRAPPED;
                 stateStartTime = millis();
                 motors.stop();
+            } else if (currentStatus == STATUS_OBJECT_IN_REAR) {
+                // Rear blocked: drive forward away from rear obstacle if front is open
+                if (!sensors.isFrontBlocked(thresholdDistance)) {
+                    currentState = STATE_PUSHING_CLEAR;
+                    stateStartTime = millis();
+                    motors.forward(EVADE_SPEED);
+                } else {
+                    // Both front and rear blocked -> rotate to open side
+                    float bestOffset = sensors.getBestClearanceAngle(thresholdDistance);
+                    targetYaw = imu.getYaw() + bestOffset;
+                    while (targetYaw > 180.0f) targetYaw -= 360.0f;
+                    while (targetYaw < -180.0f) targetYaw += 360.0f;
+
+                    currentState = STATE_ROTATING_TO_BEST_ANGLE;
+                    stateStartTime = millis();
+                }
+            } else if (currentStatus == STATUS_OBJECT_ON_LEFT) {
+                // Left blocked: rotate right away from the obstacle
+                float bestOffset = sensors.getBestClearanceAngle(thresholdDistance);
+                if (bestOffset < 30.0f) bestOffset = 60.0f; // Force turn to right
+                targetYaw = imu.getYaw() + bestOffset;
+                while (targetYaw > 180.0f) targetYaw -= 360.0f;
+                while (targetYaw < -180.0f) targetYaw += 360.0f;
+
+                currentState = STATE_ROTATING_TO_BEST_ANGLE;
+                stateStartTime = millis();
+            } else if (currentStatus == STATUS_OBJECT_ON_RIGHT) {
+                // Right blocked: rotate left away from the obstacle
+                float bestOffset = sensors.getBestClearanceAngle(thresholdDistance);
+                if (bestOffset > -30.0f) bestOffset = -60.0f; // Force turn to left
+                targetYaw = imu.getYaw() + bestOffset;
+                while (targetYaw > 180.0f) targetYaw -= 360.0f;
+                while (targetYaw < -180.0f) targetYaw += 360.0f;
+
+                currentState = STATE_ROTATING_TO_BEST_ANGLE;
+                stateStartTime = millis();
             } else if (currentStatus == STATUS_OBJECT_BOTH_SIDES) {
                 // Two sides blocked -> calculate best escape corridor using vector clearance
                 float bestOffset = sensors.getBestClearanceAngle(thresholdDistance);
@@ -64,20 +100,17 @@ void EvasionManager::executeEvadeStateMachine() {
                 currentState = STATE_ROTATING_TO_BEST_ANGLE;
                 stateStartTime = millis();
             } else if (currentStatus == STATUS_OBJECT_IN_FRONT) {
-                // Front blocked: if rear has clearance, move backward till threshold is restored
-                if (!sensors.isRearBlocked(thresholdDistance * 0.9f)) {
-                    currentState = STATE_BACKING_UP;
-                    stateStartTime = millis();
-                } else {
-                    // Rear is also tight -> rotate to best open degree
-                    float bestOffset = sensors.getBestClearanceAngle(thresholdDistance);
-                    targetYaw = imu.getYaw() + bestOffset;
-                    while (targetYaw > 180.0f) targetYaw -= 360.0f;
-                    while (targetYaw < -180.0f) targetYaw += 360.0f;
-
-                    currentState = STATE_ROTATING_TO_BEST_ANGLE;
-                    stateStartTime = millis();
+                // Front blocked: rotate to best clearance angle
+                float bestOffset = sensors.getBestClearanceAngle(thresholdDistance);
+                if (fabs(bestOffset) < 30.0f) {
+                    bestOffset = (sensors.getDistance(1) > sensors.getDistance(3)) ? 75.0f : -75.0f;
                 }
+                targetYaw = imu.getYaw() + bestOffset;
+                while (targetYaw > 180.0f) targetYaw -= 360.0f;
+                while (targetYaw < -180.0f) targetYaw += 360.0f;
+
+                currentState = STATE_ROTATING_TO_BEST_ANGLE;
+                stateStartTime = millis();
             } else {
                 // No obstacles inside threshold: hold position / stop
                 motors.stop();
@@ -108,8 +141,15 @@ void EvasionManager::executeEvadeStateMachine() {
         case STATE_ROTATING_TO_BEST_ANGLE: {
             float err = imu.getHeadingError(targetYaw);
 
-            // Reached target angle within +/- 6 degrees, or rotation timeout (3s)
-            if (fabs(err) < 6.0f || (millis() - stateStartTime > 3000)) {
+            // Reached target angle within +/- 6 degrees, or rotation timeout (2.0s with IMU, 500ms without IMU)
+            bool turnComplete = false;
+            if (imu.isConnected()) {
+                turnComplete = (fabs(err) < 6.0f) || (millis() - stateStartTime > 2000);
+            } else {
+                turnComplete = (millis() - stateStartTime > 500);
+            }
+
+            if (turnComplete) {
                 motors.stop();
                 currentState = STATE_PUSHING_CLEAR;
                 stateStartTime = millis();
@@ -128,13 +168,13 @@ void EvasionManager::executeEvadeStateMachine() {
         }
 
         case STATE_PUSHING_CLEAR: {
-            // Push forward along the newly oriented escape path
+            // Push forward along the newly oriented escape path for 1.0 second
             if (sensors.isFrontBlocked(CRITICAL_STOP_CM)) {
-                // Critical obstacle encountered; stop immediately
+                // Front blocked; stop immediately
                 motors.stop();
                 currentState = STATE_CLEAR_IDLE;
-            } else if (!sensors.isFrontBlocked(thresholdDistance) || (millis() - stateStartTime > 1200)) {
-                // Cleared threshold or push window finished
+            } else if (millis() - stateStartTime > 1000) {
+                // Push window finished; return to idle evaluation
                 motors.stop();
                 currentState = STATE_CLEAR_IDLE;
             } else {

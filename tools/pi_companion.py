@@ -95,15 +95,21 @@ class PiCompanion:
         if status == "ALL_SIDES_TRAPPED":
             print(f"\r{C_RED}{C_BOLD}[ALERT: TRAPPED]{C_RESET} All sides blocked! Bot has nowhere to move!")
         elif status == "OBJECT_BOTH_SIDES":
-            print(f"\r{C_YELLOW}[WARNING]{C_RESET} Flanks blocked on both sides! Evading...")
+            print(f"\r{C_YELLOW}[WARNING]{C_RESET} Flanks blocked on both sides! Evading corridor...")
         elif status == "OBJECT_IN_FRONT":
-            print(f"\r{C_YELLOW}[INFO]{C_RESET} Object detected in front. Backing away...")
+            print(f"\r{C_YELLOW}[INFO]{C_RESET} Object detected in FRONT. Rotating away...")
+        elif status == "OBJECT_ON_LEFT":
+            print(f"\r{C_YELLOW}[INFO]{C_RESET} Object detected on LEFT. Evading right...")
+        elif status == "OBJECT_ON_RIGHT":
+            print(f"\r{C_YELLOW}[INFO]{C_RESET} Object detected on RIGHT. Evading left...")
+        elif status == "OBJECT_IN_REAR":
+            print(f"\r{C_YELLOW}[INFO]{C_RESET} Object detected in REAR. Driving forward away...")
 
     def print_telemetry_hud(self):
         t = self.latest_telemetry
         if not t:
             return
-        d = t.get("d", [0]*8)
+        d = t.get("d", [0]*4)
         yaw = t.get("yaw", 0.0)
         mode = t.get("mode", "UNKNOWN")
         st = self.latest_status
@@ -113,7 +119,7 @@ class PiCompanion:
             f"\r{C_CYAN}[YAW: {yaw:6.1f}°]{C_RESET} "
             f"Mode: {C_BOLD}{mode:11s}{C_RESET} | "
             f"Status: {st:17s} | "
-            f"F:{d[0]:3.0f}cm R:{d[2]:3.0f}cm B:{d[4]:3.0f}cm L:{d[6]:3.0f}cm "
+            f"F:{d[0]:3.0f}cm R:{d[1]:3.0f}cm B:{d[2]:3.0f}cm L:{d[3]:3.0f}cm "
         )
         sys.stdout.flush()
 

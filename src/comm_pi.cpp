@@ -28,6 +28,9 @@ void CommPiManager::sendTelemetry(ObstacleStatus status, float currentYaw, Robot
     const char* statusStr = "CLEAR";
     switch (status) {
         case STATUS_OBJECT_IN_FRONT:     statusStr = "OBJECT_IN_FRONT"; break;
+        case STATUS_OBJECT_ON_LEFT:      statusStr = "OBJECT_ON_LEFT"; break;
+        case STATUS_OBJECT_ON_RIGHT:     statusStr = "OBJECT_ON_RIGHT"; break;
+        case STATUS_OBJECT_IN_REAR:      statusStr = "OBJECT_IN_REAR"; break;
         case STATUS_OBJECT_BOTH_SIDES:   statusStr = "OBJECT_BOTH_SIDES"; break;
         case STATUS_ALL_SIDES_TRAPPED:   statusStr = "ALL_SIDES_TRAPPED"; break;
         default:                         statusStr = "CLEAR"; break;
@@ -43,16 +46,14 @@ void CommPiManager::sendTelemetry(ObstacleStatus status, float currentYaw, Robot
     // Format primary status line for fast parsing on Pi
     Serial2.printf("STATUS:%s\n", statusStr);
 
-    // Format rich JSON telemetry string
-    Serial2.printf("{\"status\":\"%s\",\"mode\":\"%s\",\"yaw\":%.1f,\"spd\":[%d,%d],\"d\":[%.1f,%.1f,%.1f,%.1f,%.1f,%.1f,%.1f,%.1f]}\n",
+    // Format rich JSON telemetry string (4 sensors: F, R, B, L)
+    Serial2.printf("{\"status\":\"%s\",\"mode\":\"%s\",\"yaw\":%.1f,\"spd\":[%d,%d],\"d\":[%.1f,%.1f,%.1f,%.1f]}\n",
         statusStr,
         modeStr,
         currentYaw,
         lSpd, rSpd,
         sensors.getDistance(0), sensors.getDistance(1),
-        sensors.getDistance(2), sensors.getDistance(3),
-        sensors.getDistance(4), sensors.getDistance(5),
-        sensors.getDistance(6), sensors.getDistance(7)
+        sensors.getDistance(2), sensors.getDistance(3)
     );
 }
 

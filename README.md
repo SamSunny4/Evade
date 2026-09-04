@@ -1,6 +1,6 @@
 # TinkerHub CyberBot - ESP32 Autonomous Evade Robot
 
-A high-performance autonomous robot controller firmware for the **ESP32 DevKit V1** with **8-directional ultrasonic obstacle detection**, an **MPU6050 gyro orientation system**, dual **BTS7960B 43A H-Bridge motor drivers (tank steering)**, **bi-directional Raspberry Pi UART telemetry**, and an embedded **Cyberpunk Web Admin Portal** with wireless **ArduinoOTA** programming.
+A high-performance autonomous robot controller firmware for the **ESP32 DevKit V1** with **4-directional orthogonal ultrasonic obstacle detection (90° spacing)**, an **MPU6050 gyro orientation system**, a **2-channel relay module (digital tank steering)**, **WiFi Disconnect Emergency Stop Safety**, **bi-directional Raspberry Pi UART telemetry**, and an embedded **Cyberpunk Web Admin Portal** with wireless **ArduinoOTA** programming.
 
 ---
 
@@ -15,52 +15,56 @@ A high-performance autonomous robot controller firmware for the **ESP32 DevKit V
                                               | GPIO 16 (RX) / 17 (TX)
                                               v
 +------------------------+        +-----------+-----------+        +------------------------+
-| 8x Ultrasonic Sensors  |        |      ESP32 DevKit     |        |   MPU6050 Gyro / IMU   |
-| (Shared Trig: GPIO 27) +------->|        V1 (30P)       |<-------+  (I2C: GPIO 21 / 22)   |
-| 8x Echos: 34..39,32..26|        +-----------+-----------+        +------------------------+
+| 4x Ultrasonic Sensors  |        |      ESP32 DevKit     |        |   MPU6050 Gyro / IMU   |
+| (Trig1: 27, Trig2: 14) +------->|        V1 (30P)       |<-------+  (I2C: GPIO 21 / 22)   |
+| 4x Echos: 34, 35, 32, 25|       +-----------+-----------+        +------------------------+
 +------------------------+                    |
-                                              | Dual LEDC PWM Channels
+                                              | Digital Relay Control
                                               v
                                +--------------+--------------+
-                               | 2x BTS7960B Motor Drivers   |
-                               | (Tank Steering: L & R)      |
+                               |    2-Channel Relay Module   |
+                               | (Relay 1: L / Relay 2: R)   |
                                +--------------+--------------+
                                               |
                                               v
                                [ 4x High-Torque DC Motors ]
 ```
 
+> [!TIP]
+> 📖 **Looking for full schematics, terminal connections, and power distribution?**
+> Check out the complete [Hardware Wiring & Circuit Guide](WIRING_DIAGRAM.md).
+
 ---
 
 ## Complete ESP32 DevKit V1 Pin Mapping
 
-### 1. Dual BTS7960B Motor Drivers (Tank Steering)
-| BTS7960B Pin | Function | ESP32 GPIO | Description |
+### 1. 2-Channel Relay Module (Left & Right Motor Steering)
+| Relay Module Pin | Function | ESP32 GPIO | Description |
 | :--- | :--- | :--- | :--- |
-| **Left Driver RPWM** | Forward PWM | **GPIO 18** | LEDC Channel 0 (20 kHz PWM) |
-| **Left Driver LPWM** | Reverse PWM | **GPIO 19** | LEDC Channel 1 (20 kHz PWM) |
-| **Left Driver R_EN / L_EN** | Enable | **GPIO 23** | Tied to GPIO 23 (or tied to 3.3V) |
-| **Right Driver RPWM** | Forward PWM | **GPIO 4** | LEDC Channel 2 (20 kHz PWM) |
-| **Right Driver LPWM** | Reverse PWM | **GPIO 5** | LEDC Channel 3 (20 kHz PWM) |
-| **Right Driver R_EN / L_EN**| Enable | **GPIO 13** | Tied to GPIO 13 (or tied to 3.3V) |
-| **VCC** | Logic Supply | **5V** (VIN) | BTS7960B logic input |
-| **GND** | Ground | **GND** | Common ground with battery & ESP32 |
-| **B+ / B-** | Motor Battery | **12V / 24V** | High-current battery pack |
+| **IN1 (Relay 1)** | Left Motors | **GPIO 18** | Digital Output (Active LOW by default) |
+| **IN2 (Relay 2)** | Right Motors | **GPIO 19** | Digital Output (Active LOW by default) |
+| **VCC** | Relay Coil Power | **5V** (VIN) | 5V relay logic supply |
+| **GND** | Ground | **GND** | Common ground with ESP32 & battery |
 
-### 2. Ultrasonic Sensor Array (8 Directions @ 45° Spacing)
-All 8 sensors share a single trigger line (**GPIO 27**), pulsing simultaneously. Each sensor's echo is measured independently and non-blockingly via hardware interrupts:
+#### Relay Switching Truth Table
+| Maneuver | Relay 1 (CH 1 / Left Motors) | Relay 2 (CH 2 / Right Motors) | Physical Motion |
+| :--- | :--- | :--- | :--- |
+| **FORWARD** | **ON** | **ON** | Both Left & Right motors ON |
+| **TURN RIGHT** | **ON** | **OFF** | Left motors ON -> Robot pivots/turns Right |
+| **TURN LEFT** | **OFF** | **ON** | Right motors ON -> Robot pivots/turns Left |
+| **STOP / E-STOP** | **OFF** | **OFF** | Both motors cut off |
+
+### 2. Ultrasonic Sensor Array (4 Directions @ 90° Spacing)
+The 4 sensors are pulsed via two synchronized trigger pins (**GPIO 27** and **GPIO 14 / D14**). Each sensor's echo is measured independently and non-blockingly via hardware interrupts:
 
 | Sensor Index | Direction | Angle | ESP32 GPIO | Logic Level Note |
 | :--- | :--- | :--- | :--- | :--- |
-| **TRIG (Shared)** | All 8 Sensors | — | **GPIO 27** | 3.3V triggers HC-SR04 / HC-SR04P |
+| **TRIG 1** | Front & Right | — | **GPIO 27** | Primary 3.3V trigger output |
+| **TRIG 2 (D14)**| Back & Left | — | **GPIO 14** | Secondary 3.3V trigger output |
 | **S0** | Front | 0° | **GPIO 34** | Input Only (1kΩ / 2kΩ divider if 5V) |
-| **S1** | Front-Right | 45° | **GPIO 35** | Input Only (Divider if 5V) |
-| **S2** | Right | 90° | **GPIO 36 (VP)** | Input Only (Divider if 5V) |
-| **S3** | Back-Right | 135° | **GPIO 39 (VN)** | Input Only (Divider if 5V) |
-| **S4** | Back | 180° | **GPIO 32** | Digital Input |
-| **S5** | Back-Left | 225° | **GPIO 33** | Digital Input |
-| **S6** | Left | 270° | **GPIO 25** | Digital Input |
-| **S7** | Front-Left | 315° | **GPIO 26** | Digital Input |
+| **S1** | Right | 90° | **GPIO 35** | Input Only (Divider if 5V) |
+| **S2** | Back | 180° | **GPIO 32** | Digital Input |
+| **S3** | Left | 270° | **GPIO 25** | Digital Input |
 
 > [!CAUTION]
 > **Voltage Divider on 5V HC-SR04 Echo Lines:**
@@ -93,7 +97,7 @@ All 8 sensors share a single trigger line (**GPIO 27**), pulsing simultaneously.
   - 100% non-blocking interrupt-based ultrasonic scanning.
   - High-rate MPU6050 yaw drift-compensated integration.
   - Evasion state machine & closed-loop gyro turns.
-  - BTS7960B 20kHz silent PWM tank drive.
+  - 2-Channel Relay digital motor switching.
   - Raspberry Pi UART packet engine.
 
 ### 2. Autonomous Evasion Logic

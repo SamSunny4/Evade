@@ -14,6 +14,7 @@ public:
     RobotControlMode getActiveMode() const;
     void setActiveMode(RobotControlMode mode);
     bool isWebOverrideActive() const;
+    bool isConnected() const;
 
 private:
     void setupRoutes();
@@ -28,6 +29,11 @@ private:
     RobotControlMode activeMode;
     uint32_t lastWebCmdTime;
     String localIPStr;
+
+    bool wifiWasConnected;
+    uint32_t lastLedBlinkTime;
+    bool ledState;
+    uint32_t lastDisconnectAlertTime;
 };
 
 extern WebAdminManager webAdmin;

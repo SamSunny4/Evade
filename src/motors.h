@@ -41,15 +41,20 @@ public:
     MotorCommand getCurrentCommand() const;
     void getSpeeds(int16_t &left, int16_t &right) const;
 
+    // Relay state queries
+    bool isRelay1On() const;
+    bool isRelay2On() const;
+
 private:
-    void applyLeftMotor(int16_t speed);
-    void applyRightMotor(int16_t speed);
+    void applyRelays(bool relay1On, bool relay2On);
 
     uint8_t baseSpeed;
     int16_t currentLeftSpeed;
     int16_t currentRightSpeed;
     MotorCommand currentCmd;
     bool eStopActive;
+    bool relay1State;
+    bool relay2State;
 };
 
 extern MotorsManager motors;

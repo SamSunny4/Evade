@@ -2,15 +2,11 @@
 #include <Arduino.h>
 #include "config.h"
 
-// Sector Angles for the 8 Ultrasonic Sensors
+// Sector Angles for the 4 Ultrasonic Sensors (90° Spacing)
 // Index 0: 0°   (Front)
-// Index 1: 45°  (Front-Right)
-// Index 2: 90°  (Right)
-// Index 3: 135° (Back-Right)
-// Index 4: 180° (Back)
-// Index 5: 225° (Back-Left)
-// Index 6: 270° (Left)
-// Index 7: 315° (Front-Left)
+// Index 1: 90°  (Right)
+// Index 2: 180° (Back)
+// Index 3: 270° (Left / -90°)
 
 class SensorsManager {
 public:

@@ -33,8 +33,7 @@ except ImportError:
 # Regex patterns matching exact ESP32 USB Serial output
 RE_TELEMETRY = re.compile(
     r"\[YAW:\s*([+-]?\d+\.?\d*)°\]\s*\[(.*?)\]\s*\[MOT:L=\s*([+-]?\d+)\s+R=\s*([+-]?\d+)\]\s*\|\s*"
-    r"S0\(F\):\s*(\d+\.?\d*)\s+S1\(FR\):\s*(\d+\.?\d*)\s+S2\(R\):\s*(\d+\.?\d*)\s+S3\(BR\):\s*(\d+\.?\d*)\s+"
-    r"S4\(B\):\s*(\d+\.?\d*)\s+S5\(BL\):\s*(\d+\.?\d*)\s+S6\(L\):\s*(\d+\.?\d*)\s+S7\(FL\):\s*(\d+\.?\d*)"
+    r"S0\(F\):\s*(\d+\.?\d*)\s+S1\(R\):\s*(\d+\.?\d*)\s+S2\(B\):\s*(\d+\.?\d*)\s+S3\(L\):\s*(\d+\.?\d*)"
 )
 
 RE_ALERT = re.compile(
@@ -43,9 +42,9 @@ RE_ALERT = re.compile(
 
 RE_ESTOP = re.compile(r">>> EMERGENCY STOP ACTIVATED")
 
-# Sensor Sector Definitions
-SENSOR_NAMES = ["S0 (Front)", "S1 (FR)", "S2 (Right)", "S3 (BR)", "S4 (Back)", "S5 (BL)", "S6 (Left)", "S7 (FL)"]
-SENSOR_ANGLES = [0, 45, 90, 135, 180, 225, 270, 315]
+# Sensor Sector Definitions (4 Orthogonal Sensors @ 90° Spacing)
+SENSOR_NAMES = ["S0 (Front)", "S1 (Right)", "S2 (Back)", "S3 (Left)"]
+SENSOR_ANGLES = [0, 90, 180, 270]
 
 # Color Palette (Futuristic Dark Cyber Theme)
 BG_DARK = "#090D16"
@@ -81,7 +80,7 @@ class BotVisualizerApp:
         self.left_pwm = 0
         self.right_pwm = 0
         self.threshold = 25.0
-        self.distances = [300.0] * 8
+        self.distances = [300.0] * 4
         self.action_text = "SYSTEM IDLE / WAITING FOR SERIAL"
         self.action_color = TEXT_MUTED
 
@@ -129,7 +128,7 @@ class BotVisualizerApp:
         left_col = tk.Frame(main_body, bg=BG_CARD, padx=14, pady=14, highlightthickness=1, highlightbackground=BORDER_COLOR)
         left_col.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=(0, 8))
 
-        radar_title = tk.Label(left_col, text="8-DIRECTION ULTRASONIC RADAR & ORIENTATION", fg=TEXT_MUTED, bg=BG_CARD, font=("Segoe UI", 10, "bold"))
+        radar_title = tk.Label(left_col, text="4-DIRECTION ULTRASONIC RADAR & ORIENTATION", fg=TEXT_MUTED, bg=BG_CARD, font=("Segoe UI", 10, "bold"))
         radar_title.pack(anchor=tk.W, pady=(0, 6))
 
         self.radar_canvas = tk.Canvas(left_col, bg="#070A10", highlightthickness=0)
@@ -323,20 +322,18 @@ class BotVisualizerApp:
         self.yaw = round(math.sin(t * 0.5) * 45.0, 1)
 
         # Simulated dynamic distances
-        for i in range(8):
-            angle_offset = i * (math.pi / 4.0)
+        for i in range(4):
+            angle_offset = i * (math.pi / 2.0)
             dist = 120.0 + 80.0 * math.sin(t + angle_offset)
             self.distances[i] = round(max(8.0, dist), 1)
 
         # Trigger obstacle in front periodically
         if (self.sim_tick // 40) % 2 == 1:
             self.distances[0] = 18.0
-            self.distances[7] = 22.0
-            self.distances[1] = 20.0
             self.status = "OBJECT_IN_FRONT"
-            self.left_pwm = -170
-            self.right_pwm = -170
-            self.action_text = "⚡ ACTION: REVERSING AWAY FROM FRONT OBSTACLE"
+            self.left_pwm = 0
+            self.right_pwm = 190
+            self.action_text = "⚡ ACTION: PIVOTING AWAY FROM FRONT OBSTACLE"
             self.action_color = AMBER
         else:
             self.status = "CLEAR"
@@ -356,7 +353,7 @@ class BotVisualizerApp:
             self.mode = m.group(2).strip()
             self.left_pwm = int(m.group(3))
             self.right_pwm = int(m.group(4))
-            for i in range(8):
+            for i in range(4):
                 self.distances[i] = float(m.group(5 + i))
 
             self._derive_action_taken()
@@ -472,9 +469,9 @@ class BotVisualizerApp:
         thresh_r = min(max_r, (self.threshold / 300.0) * max_r)
         c.create_oval(cx - thresh_r, cy - thresh_r, cx + thresh_r, cy + thresh_r, outline=RED, width=1, dash=(4, 4))
 
-        # 8 Sonar Beams
+        # 4 Sonar Beams
         # Canvas angles: 0° is Front (-90° in standard Cartesian), rotating clockwise
-        for i in range(8):
+        for i in range(len(SENSOR_ANGLES)):
             deg = SENSOR_ANGLES[i] - 90  # 0° (Front) points UP (-90°)
             rad = math.radians(deg)
             dist = self.distances[i]

@@ -5,49 +5,49 @@
 // ESP32 DevKit V1 Pin Configuration
 // ====================================================================
 
-// --- Ultrasonic Sensors (8-Directional Array) ---
-// Shared Trigger Pin pulses all sensors simultaneously
-#define PIN_US_TRIG            27
+// --- Onboard Status Indicator LED ---
+#define PIN_STATUS_LED         2   // Built-in Blue LED on ESP32 DevKit V1
 
-// 8 Dedicated Echo Input Pins (45° apart)
+// --- Ultrasonic Sensors (4-Directional Array @ 90° Spacing) ---
+// Dual Trigger Pins pulse sensors (e.g. Trig 1: GPIO 27, Trig 2: GPIO 14 / D14)
+#define PIN_US_TRIG_1          27  // Primary Trigger (GPIO 27)
+#define PIN_US_TRIG_2          14  // Secondary Trigger (GPIO 14 / D14)
+#define PIN_US_TRIG            PIN_US_TRIG_1  // Compatibility alias
+
+// 4 Dedicated Echo Input Pins (90° apart)
 // S0: 0° (Front)
 #define PIN_US_ECHO_0          34
-// S1: 45° (Front-Right)
+// S1: 90° (Right)
 #define PIN_US_ECHO_1          35
-// S2: 90° (Right)
-#define PIN_US_ECHO_2          36  // VP
-// S3: 135° (Back-Right)
-#define PIN_US_ECHO_3          39  // VN
-// S4: 180° (Back)
-#define PIN_US_ECHO_4          32
-// S5: 225° (Back-Left)
-#define PIN_US_ECHO_5          33
-// S6: 270° (Left)
-#define PIN_US_ECHO_6          25
-// S7: 315° (Front-Left)
-#define PIN_US_ECHO_7          26
+// S2: 180° (Back)
+#define PIN_US_ECHO_2          32
+// S3: 270° (Left)
+#define PIN_US_ECHO_3          25
 
-#define NUM_ULTRASONIC_SENSORS 8
+#define NUM_ULTRASONIC_SENSORS 4
 
-// --- BTS7960B Motor Drivers (2x Modules for Tank Steering) ---
-// Left Motor Driver
-#define PIN_L_RPWM             18  // Forward PWM
-#define PIN_L_LPWM             19  // Reverse PWM
-#define PIN_L_EN               23  // Enable (Active HIGH, or tie to 3.3V)
+// --- 2-Channel Relay Module (Left & Right Motors) ---
+// Relay 1 (Channel 1): Left Motor
+// Relay 2 (Channel 2): Right Motor
+#define PIN_RELAY_1            18  // Channel 1: Left Motors
+#define PIN_RELAY_2            19  // Channel 2: Right Motors
 
-// Right Motor Driver
-#define PIN_R_RPWM             4   // Forward PWM
-#define PIN_R_LPWM             5   // Reverse PWM
-#define PIN_R_EN               13  // Enable (Active HIGH, or tie to 3.3V)
+// Relay Module Active Logic Level:
+// Standard 5V opto-isolated relay modules are ACTIVE LOW (LOW = Relay ON / Energized)
+// Set RELAY_ACTIVE_LOW to false if your relay module is Active HIGH
+#define RELAY_ACTIVE_LOW       true
+#define RELAY_ON               (RELAY_ACTIVE_LOW ? LOW : HIGH)
+#define RELAY_OFF              (RELAY_ACTIVE_LOW ? HIGH : LOW)
 
-// LEDC PWM Channels
-#define PWM_CH_L_FWD           0
-#define PWM_CH_L_REV           1
-#define PWM_CH_R_FWD           2
-#define PWM_CH_R_REV           3
-
-#define PWM_FREQ               20000 // 20kHz: silent running, no audible motor whine
-#define PWM_RESOLUTION         8     // 8-bit: 0-255
+// Steering & Motion Truth Table:
+// - Relay 1 ON,  Relay 2 OFF -> Left Motors ON  -> Turn Right
+// - Relay 1 OFF, Relay 2 ON  -> Right Motors ON -> Turn Left
+// - Relay 1 ON,  Relay 2 ON  -> Both Motors ON  -> Move Forward
+// - Relay 1 OFF, Relay 2 OFF -> Both Motors OFF -> Stop / E-Stop
+//
+// 2-channel relay cannot reverse DC polarity without an external H-bridge.
+// Set to false so autonomous evasion rotates to best angle when front is blocked.
+#define RELAY_CAN_REVERSE      false
 
 // --- MPU6050 Gyro / Accelerometer (I2C) ---
 #define PIN_I2C_SDA            21
@@ -87,6 +87,9 @@ enum RobotControlMode {
 enum ObstacleStatus {
     STATUS_CLEAR = 0,
     STATUS_OBJECT_IN_FRONT,
+    STATUS_OBJECT_ON_RIGHT,
+    STATUS_OBJECT_ON_LEFT,
+    STATUS_OBJECT_IN_REAR,
     STATUS_OBJECT_BOTH_SIDES,
     STATUS_ALL_SIDES_TRAPPED
 };

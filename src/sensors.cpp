@@ -5,16 +5,12 @@ static const uint8_t ECHO_PINS[NUM_ULTRASONIC_SENSORS] = {
     PIN_US_ECHO_0,
     PIN_US_ECHO_1,
     PIN_US_ECHO_2,
-    PIN_US_ECHO_3,
-    PIN_US_ECHO_4,
-    PIN_US_ECHO_5,
-    PIN_US_ECHO_6,
-    PIN_US_ECHO_7
+    PIN_US_ECHO_3
 };
 
-// Sector angles in radians and degrees
+// Sector angles in degrees (Front: 0°, Right: 90°, Back: 180°, Left: -90° / 270°)
 static const float SENSOR_ANGLES_DEG[NUM_ULTRASONIC_SENSORS] = {
-    0.0f, 45.0f, 90.0f, 135.0f, 180.0f, -135.0f, -90.0f, -45.0f
+    0.0f, 90.0f, 180.0f, -90.0f
 };
 
 volatile uint32_t SensorsManager::echoStartMicros[NUM_ULTRASONIC_SENSORS] = {0};
@@ -26,10 +22,6 @@ void IRAM_ATTR isr0() { SensorsManager::handleEchoChange(0); }
 void IRAM_ATTR isr1() { SensorsManager::handleEchoChange(1); }
 void IRAM_ATTR isr2() { SensorsManager::handleEchoChange(2); }
 void IRAM_ATTR isr3() { SensorsManager::handleEchoChange(3); }
-void IRAM_ATTR isr4() { SensorsManager::handleEchoChange(4); }
-void IRAM_ATTR isr5() { SensorsManager::handleEchoChange(5); }
-void IRAM_ATTR isr6() { SensorsManager::handleEchoChange(6); }
-void IRAM_ATTR isr7() { SensorsManager::handleEchoChange(7); }
 
 SensorsManager sensors;
 
@@ -56,8 +48,10 @@ void IRAM_ATTR SensorsManager::handleEchoChange(uint8_t index) {
 }
 
 void SensorsManager::init() {
-    pinMode(PIN_US_TRIG, OUTPUT);
-    digitalWrite(PIN_US_TRIG, LOW);
+    pinMode(PIN_US_TRIG_1, OUTPUT);
+    digitalWrite(PIN_US_TRIG_1, LOW);
+    pinMode(PIN_US_TRIG_2, OUTPUT);
+    digitalWrite(PIN_US_TRIG_2, LOW);
 
     // Attach interrupt to each echo pin
     pinMode(ECHO_PINS[0], INPUT);
@@ -71,28 +65,18 @@ void SensorsManager::init() {
 
     pinMode(ECHO_PINS[3], INPUT);
     attachInterrupt(digitalPinToInterrupt(ECHO_PINS[3]), isr3, CHANGE);
-
-    pinMode(ECHO_PINS[4], INPUT);
-    attachInterrupt(digitalPinToInterrupt(ECHO_PINS[4]), isr4, CHANGE);
-
-    pinMode(ECHO_PINS[5], INPUT);
-    attachInterrupt(digitalPinToInterrupt(ECHO_PINS[5]), isr5, CHANGE);
-
-    pinMode(ECHO_PINS[6], INPUT);
-    attachInterrupt(digitalPinToInterrupt(ECHO_PINS[6]), isr6, CHANGE);
-
-    pinMode(ECHO_PINS[7], INPUT);
-    attachInterrupt(digitalPinToInterrupt(ECHO_PINS[7]), isr7, CHANGE);
 }
 
 void SensorsManager::triggerPulse() {
     for (int i = 0; i < NUM_ULTRASONIC_SENSORS; i++) {
         echoReceived[i] = false;
     }
-    // 10 microsecond pulse on shared trigger line
-    digitalWrite(PIN_US_TRIG, HIGH);
+    // 10 microsecond pulse on both trigger lines simultaneously
+    digitalWrite(PIN_US_TRIG_1, HIGH);
+    digitalWrite(PIN_US_TRIG_2, HIGH);
     delayMicroseconds(10);
-    digitalWrite(PIN_US_TRIG, LOW);
+    digitalWrite(PIN_US_TRIG_1, LOW);
+    digitalWrite(PIN_US_TRIG_2, LOW);
 
     lastTriggerTime = millis();
     triggerPending = true;
@@ -161,21 +145,21 @@ const float* SensorsManager::getAllDistances() const {
     return smoothedDistances;
 }
 
-// Check sectors
+// Check sectors (4 sensors @ 90°: 0:Front, 1:Right, 2:Back, 3:Left)
 bool SensorsManager::isFrontBlocked(float threshold) const {
-    return (smoothedDistances[7] < threshold || smoothedDistances[0] < threshold || smoothedDistances[1] < threshold);
-}
-
-bool SensorsManager::isRearBlocked(float threshold) const {
-    return (smoothedDistances[3] < threshold || smoothedDistances[4] < threshold || smoothedDistances[5] < threshold);
-}
-
-bool SensorsManager::isLeftBlocked(float threshold) const {
-    return (smoothedDistances[5] < threshold || smoothedDistances[6] < threshold || smoothedDistances[7] < threshold);
+    return (smoothedDistances[0] < threshold);
 }
 
 bool SensorsManager::isRightBlocked(float threshold) const {
-    return (smoothedDistances[1] < threshold || smoothedDistances[2] < threshold || smoothedDistances[3] < threshold);
+    return (smoothedDistances[1] < threshold);
+}
+
+bool SensorsManager::isRearBlocked(float threshold) const {
+    return (smoothedDistances[2] < threshold);
+}
+
+bool SensorsManager::isLeftBlocked(float threshold) const {
+    return (smoothedDistances[3] < threshold);
 }
 
 bool SensorsManager::isBothSidesBlocked(float threshold) const {
@@ -183,14 +167,14 @@ bool SensorsManager::isBothSidesBlocked(float threshold) const {
 }
 
 bool SensorsManager::isTrapped(float threshold) const {
-    // Trapped if Front, Rear, Left, and Right are all blocked or >= 6 sensors are within threshold
+    // Trapped if Front, Rear, and Both Sides are blocked or >= 3 sensors are within threshold
     uint8_t blockedCount = 0;
     for (int i = 0; i < NUM_ULTRASONIC_SENSORS; i++) {
         if (smoothedDistances[i] < threshold) {
             blockedCount++;
         }
     }
-    if (blockedCount >= 6) return true;
+    if (blockedCount >= 3) return true;
     return (isFrontBlocked(threshold) && isRearBlocked(threshold) && isBothSidesBlocked(threshold));
 }
 
@@ -241,6 +225,15 @@ ObstacleStatus SensorsManager::evaluateStatus(float threshold) const {
     }
     if (isFrontBlocked(threshold)) {
         return STATUS_OBJECT_IN_FRONT;
+    }
+    if (isLeftBlocked(threshold)) {
+        return STATUS_OBJECT_ON_LEFT;
+    }
+    if (isRightBlocked(threshold)) {
+        return STATUS_OBJECT_ON_RIGHT;
+    }
+    if (isRearBlocked(threshold)) {
+        return STATUS_OBJECT_IN_REAR;
     }
     return STATUS_CLEAR;
 }
