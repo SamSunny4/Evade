@@ -134,7 +134,6 @@
  C:/Users/samsu/.platformio/packages/framework-arduinoespressif32/tools/sdk/esp32/include/esp_hw_support/include/soc/esp32/spiram.h \
  C:/Users/samsu/.platformio/packages/framework-arduinoespressif32/cores/esp32/io_pin_remap.h \
  C:/Users/samsu/.platformio/packages/framework-arduinoespressif32/cores/esp32/Arduino.h \
- src/config.h src/sensors.h src/imu.h \
+ src/config.h src/motors.h src/sensors.h src/imu.h \
  C:/Users/samsu/.platformio/packages/framework-arduinoespressif32/libraries/Wire/src/Wire.h \
- C:/Users/samsu/.platformio/packages/framework-arduinoespressif32/cores/esp32/esp32-hal.h \
- src/motors.h
+ C:/Users/samsu/.platformio/packages/framework-arduinoespressif32/cores/esp32/esp32-hal.h

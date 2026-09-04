@@ -45,8 +45,18 @@ public:
     bool isRelay1On() const;
     bool isRelay2On() const;
 
+    // Relay Tap & Inching Engine
+    void update(); // Non-blocking tap duty-cycle engine
+    void singleTap(MotorCommand cmd); // Executes one discrete pulse and coasts
+    void setTapSpeed(uint8_t speed); // Dynamically maps speed to tapOnMs & tapOffMs
+    void setTapTiming(uint16_t onMs, uint16_t offMs);
+    uint16_t getTapOnMs() const;
+    uint16_t getTapOffMs() const;
+    bool isTapping() const;
+
 private:
     void applyRelays(bool relay1On, bool relay2On);
+    void applyCommandRelays(MotorCommand cmd);
 
     uint8_t baseSpeed;
     int16_t currentLeftSpeed;
@@ -55,6 +65,14 @@ private:
     bool eStopActive;
     bool relay1State;
     bool relay2State;
+
+    // Tap engine state
+    uint16_t tapOnMs;
+    uint16_t tapOffMs;
+    uint32_t tapCycleStartTime;
+    bool inTapPulse;
+    bool tapModeActive;
+    bool singleTapOnly;
 };
 
 extern MotorsManager motors;

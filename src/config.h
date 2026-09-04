@@ -69,6 +69,14 @@
 #define TURN_SPEED             190
 #define EVADE_SPEED            170
 
+// --- Relay Pulse / Tap Parameters ---
+#define DEFAULT_TAP_ON_MS      60   // Relay energized pulse duration (ms)
+#define MIN_TAP_ON_MS          25   // Minimum tap pulse (micro-nudge)
+#define MAX_TAP_ON_MS          160  // Maximum tap pulse
+#define DEFAULT_TAP_OFF_MS     110  // Coast & ultrasonic measurement window between taps (ms)
+#define MIN_TAP_OFF_MS         60   // Minimum pause between taps
+#define MAX_TAP_OFF_MS         300  // Maximum pause between taps
+
 // --- Access Point (AP) & OTA Configuration ---
 #define AP_SSID                "ESP32-EvadeBot-AP"
 #define AP_PASSWORD            "admin12345"

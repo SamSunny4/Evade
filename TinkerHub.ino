@@ -106,6 +106,7 @@ void loop() {
     imu.update();
     sensors.update();
     commPi.update();
+    motors.update();
 
     RobotControlMode activeMode;
     if (webAdmin.isWebOverrideActive()) {

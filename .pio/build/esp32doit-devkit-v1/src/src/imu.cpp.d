@@ -135,4 +135,4 @@
  C:/Users/samsu/.platformio/packages/framework-arduinoespressif32/cores/esp32/Arduino.h \
  C:/Users/samsu/.platformio/packages/framework-arduinoespressif32/libraries/Wire/src/Wire.h \
  C:/Users/samsu/.platformio/packages/framework-arduinoespressif32/cores/esp32/esp32-hal.h \
- src/config.h
+ src/config.h src/motors.h

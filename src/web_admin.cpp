@@ -384,11 +384,99 @@ static const char INDEX_HTML[] PROGMEM = R"rawliteral(
       animation: ping 2s cubic-bezier(0, 0, 0.2, 1) infinite;
     }
 
-    @keyframes ping {
-      75%, 100% {
-        transform: scale(1.6);
-        opacity: 0;
-      }
+    .bot-pointer {
+      position: absolute;
+      top: -8px;
+      font-size: 11px;
+      color: var(--cyan-neon);
+      text-shadow: 0 0 6px var(--cyan-neon);
+    }
+
+    .heading-live-badge {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 11px;
+      font-weight: 700;
+      color: var(--cyan-neon);
+      background: rgba(0, 240, 255, 0.08);
+      border: 1px solid rgba(0, 240, 255, 0.25);
+      border-radius: 6px;
+      padding: 4px 8px;
+      margin-top: 8px;
+      text-align: center;
+      letter-spacing: 0.5px;
+    }
+
+    /* IMU & ODOMETRY CARD STYLES */
+    .imu-stats-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+      margin-bottom: 10px;
+    }
+
+    .imu-stat-box {
+      background: rgba(15, 23, 42, 0.65);
+      border: 1px solid rgba(255, 255, 255, 0.07);
+      border-radius: 10px;
+      padding: 9px 10px;
+      display: flex;
+      flex-direction: column;
+      gap: 3px;
+    }
+
+    .imu-stat-label {
+      font-size: 10px;
+      font-weight: 700;
+      color: var(--text-secondary);
+      letter-spacing: 0.5px;
+    }
+
+    .imu-stat-val {
+      font-size: 13px;
+      font-weight: 800;
+      font-family: 'JetBrains Mono', monospace;
+      color: var(--text-primary);
+    }
+
+    .arena-wrap {
+      margin-bottom: 10px;
+    }
+
+    .arena-legend {
+      display: flex;
+      justify-content: space-between;
+      font-size: 10px;
+      color: var(--text-secondary);
+      margin-top: 4px;
+      padding: 0 4px;
+      font-family: 'JetBrains Mono', monospace;
+    }
+
+    .imu-btn-row {
+      display: grid;
+      grid-template-columns: 1fr 1fr 1fr;
+      gap: 6px;
+    }
+
+    .btn-action {
+      background: rgba(30, 41, 59, 0.85);
+      border: 1px solid rgba(0, 240, 255, 0.3);
+      color: #E2E8F0;
+      padding: 8px 4px;
+      border-radius: 8px;
+      font-size: 11px;
+      font-weight: 700;
+      cursor: pointer;
+      transition: all 0.15s ease;
+      text-align: center;
+    }
+    .btn-action:hover {
+      background: rgba(0, 240, 255, 0.15);
+      border-color: var(--cyan-neon);
+      color: #FFF;
+    }
+    .btn-action:active {
+      transform: scale(0.96);
     }
   </style>
 </head>
@@ -438,8 +526,9 @@ static const char INDEX_HTML[] PROGMEM = R"rawliteral(
             <div class="sensor-meter"><div class="meter-bar" id="barLeft"></div></div>
           </div>
 
-          <div class="robot-center-icon">
+          <div class="robot-center-icon" id="botCenterIcon">
             <div class="robot-pulse"></div>
+            <div class="bot-pointer">▲</div>
             <span>🤖</span>
           </div>
 
@@ -456,6 +545,51 @@ static const char INDEX_HTML[] PROGMEM = R"rawliteral(
           <span class="sensor-val" id="valBack">---</span>
           <span class="sensor-dir">▼ BACK</span>
         </div>
+      </div>
+      <div class="heading-live-badge" id="headingLiveBadge">YAW: 000.0° (N)</div>
+    </div>
+
+    <!-- 6-DOF IMU & POSITION ODOMETRY CARD -->
+    <div class="card" id="imuCard">
+      <div class="card-title" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+        <span>6-DOF IMU & Position Odometry</span>
+        <span id="imuStatusBadge" style="font-size: 10px; padding: 3px 8px; border-radius: 8px; background: rgba(16,185,129,0.15); color: var(--emerald-neon); border: 1px solid rgba(16,185,129,0.3); font-weight: 700;">MPU6050 ONLINE</span>
+      </div>
+
+      <!-- METRICS GRID -->
+      <div class="imu-stats-grid">
+        <div class="imu-stat-box">
+          <span class="imu-stat-label">HEADING (YAW)</span>
+          <span class="imu-stat-val" id="valYaw" style="color: var(--cyan-neon);">0.0° (N)</span>
+        </div>
+        <div class="imu-stat-box">
+          <span class="imu-stat-label">PITCH / ROLL</span>
+          <span class="imu-stat-val" id="valPitchRoll">0.0° / 0.0°</span>
+        </div>
+        <div class="imu-stat-box">
+          <span class="imu-stat-label">POSITION (X, Y)</span>
+          <span class="imu-stat-val" id="valCoords" style="color: #A78BFA;">0.0, 0.0 cm</span>
+        </div>
+        <div class="imu-stat-box">
+          <span class="imu-stat-label">ANGULAR RATE (ωz)</span>
+          <span class="imu-stat-val" id="valRateZ">0.0 °/s</span>
+        </div>
+      </div>
+
+      <!-- 2D ARENA CANVAS -->
+      <div class="arena-wrap">
+        <canvas id="arenaCanvas" width="400" height="220" style="width: 100%; border-radius: 12px; background: #060911; border: 1px solid rgba(0, 240, 255, 0.2); cursor: crosshair; display: block;"></canvas>
+        <div class="arena-legend">
+          <span>Click grid to assume (X, Y) pose</span>
+          <span id="arenaScaleLbl">Grid: 25cm/div</span>
+        </div>
+      </div>
+
+      <!-- POSE & CALIBRATION BUTTONS -->
+      <div class="imu-btn-row">
+        <button class="btn-action" onclick="resetHeadingOnly()">🎯 Zero Heading</button>
+        <button class="btn-action" onclick="resetOriginOnly()">📍 Reset (0,0)</button>
+        <button class="btn-action" onclick="promptCustomPose()">📐 Set Pose</button>
       </div>
     </div>
 
@@ -486,10 +620,10 @@ static const char INDEX_HTML[] PROGMEM = R"rawliteral(
       <!-- SLIDERS -->
       <div class="slider-group">
         <div class="slider-label">
-          <span>Drive Speed</span>
-          <span id="speedDisplay">180</span>
+          <span>Tap Throttle & Speed</span>
+          <span id="speedDisplay">180 (60ms pulse / 110ms rest)</span>
         </div>
-        <input type="range" id="speedRange" min="80" max="255" value="180" oninput="updateSpeed(this.value)">
+        <input type="range" id="speedRange" min="50" max="255" value="180" oninput="updateSpeed(this.value)">
       </div>
 
       <div class="slider-group">
@@ -519,20 +653,24 @@ static const char INDEX_HTML[] PROGMEM = R"rawliteral(
         const estopBtn = document.getElementById('estopBtn');
         const resumeBtn = document.getElementById('resumeBtn');
         const controlsCard = document.getElementById('controlsCard');
-        const badge = document.getElementById('systemBadge');
+        const sysBadge = document.getElementById('systemBadge');
 
         if (isEstop) {
           estopBtn.style.display = 'none';
           resumeBtn.style.display = 'flex';
           controlsCard.classList.add('disabled-overlay');
-          badge.innerText = 'E-STOPPED';
-          badge.classList.add('estop-alert');
+          if (sysBadge) {
+            sysBadge.innerText = 'E-STOPPED';
+            sysBadge.classList.add('estop-alert');
+          }
         } else {
           estopBtn.style.display = 'flex';
           resumeBtn.style.display = 'none';
           controlsCard.classList.remove('disabled-overlay');
-          badge.innerText = activeMode === 'AUTO_EVADE' ? 'AUTO EVADE' : (activeMode === 'PI_OVERRIDE' ? 'PI CONTROL' : 'MANUAL');
-          badge.classList.remove('estop-alert');
+          if (sysBadge) {
+            sysBadge.innerText = activeMode === 'AUTO_EVADE' ? 'AUTO EVADE' : (activeMode === 'PI_OVERRIDE' ? 'PI CONTROL' : 'MANUAL');
+            sysBadge.classList.remove('estop-alert');
+          }
         }
 
         // Mode button styling
@@ -589,8 +727,54 @@ static const char INDEX_HTML[] PROGMEM = R"rawliteral(
             alertLbl.style.color = 'var(--emerald-neon)';
           }
         }
+
+        // Update IMU & Odometry Position
+        const yaw = data.yaw !== undefined ? data.yaw : 0.0;
+        const pitch = data.pitch !== undefined ? data.pitch : 0.0;
+        const roll = data.roll !== undefined ? data.roll : 0.0;
+        const rateZ = data.rate_z !== undefined ? data.rate_z : 0.0;
+        const posX = data.x !== undefined ? data.x : 0.0;
+        const posY = data.y !== undefined ? data.y : 0.0;
+        const imuConn = data.imu_conn !== undefined ? data.imu_conn : false;
+
+        // Rotate bot in center of radar
+        const botIcon = document.getElementById('botCenterIcon');
+        if (botIcon) botIcon.style.transform = `rotate(${yaw}deg)`;
+
+        function getCompassDir(deg) {
+          const norm = ((deg % 360) + 360) % 360;
+          const dirs = ['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW'];
+          return dirs[Math.round(norm / 45) % 8];
+        }
+
+        const headingStr = `${yaw >= 0 ? '+' : ''}${yaw.toFixed(1)}° (${getCompassDir(yaw)})`;
+        const headingBadge = document.getElementById('headingLiveBadge');
+        if (headingBadge) headingBadge.innerText = `YAW: ${headingStr}`;
+
+        // Update IMU Telemetry Card
+        document.getElementById('valYaw').innerText = headingStr;
+        document.getElementById('valPitchRoll').innerText = `${pitch >= 0 ? '+' : ''}${pitch.toFixed(1)}° / ${roll >= 0 ? '+' : ''}${roll.toFixed(1)}°`;
+        document.getElementById('valCoords').innerText = `X: ${posX.toFixed(1)} | Y: ${posY.toFixed(1)} cm`;
+        document.getElementById('valRateZ').innerText = `${rateZ.toFixed(1)} °/s`;
+
+        const imuBadge = document.getElementById('imuStatusBadge');
+        if (imuBadge) {
+          if (imuConn) {
+            imuBadge.innerText = 'MPU6050 ONLINE (0x68)';
+            imuBadge.style.color = 'var(--emerald-neon)';
+            imuBadge.style.borderColor = 'rgba(16,185,129,0.3)';
+          } else {
+            imuBadge.innerText = 'KINEMATIC TRACKER';
+            imuBadge.style.color = '#F59E0B';
+            imuBadge.style.borderColor = 'rgba(245,158,11,0.3)';
+          }
+        }
+
+        // Draw 2D Position Arena
+        drawArena(posX, posY, yaw, data.d);
       } catch (err) {
-        document.getElementById('systemBadge').innerText = 'OFFLINE';
+        const sysBadge = document.getElementById('systemBadge');
+        if (sysBadge) sysBadge.innerText = 'OFFLINE';
       }
     }
 
@@ -642,13 +826,168 @@ static const char INDEX_HTML[] PROGMEM = R"rawliteral(
     }
 
     function updateSpeed(val) {
-      document.getElementById('speedDisplay').innerText = val;
+      const v = parseInt(val);
+      const onMs = Math.round(25 + ((v - 50) / 205) * (160 - 25));
+      const offMs = Math.round(250 - ((v - 50) / 205) * (250 - 60));
+      document.getElementById('speedDisplay').innerText = `${v} (${onMs}ms pulse / ${offMs}ms rest)`;
       fetch('/api/config', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ speed: parseInt(val) })
+        body: JSON.stringify({ speed: v })
       });
     }
+
+    // --- 2D Arena & IMU Pose Management ---
+    function drawArena(botX, botY, yawDeg, distances) {
+      const canvas = document.getElementById('arenaCanvas');
+      if (!canvas) return;
+      const ctx = canvas.getContext('2d');
+      const w = canvas.width;
+      const h = canvas.height;
+      const cx = w / 2;
+      const cy = h / 2;
+      const scale = 0.8; // 0.8 px per cm
+
+      ctx.clearRect(0, 0, w, h);
+
+      // 1. Coordinate Grid
+      ctx.strokeStyle = 'rgba(255, 255, 255, 0.06)';
+      ctx.lineWidth = 1;
+      const gridSpacing = 25 * scale; // 25cm grid lines
+      for (let x = cx % gridSpacing; x < w; x += gridSpacing) {
+        ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, h); ctx.stroke();
+      }
+      for (let y = cy % gridSpacing; y < h; y += gridSpacing) {
+        ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(w, y); ctx.stroke();
+      }
+
+      // 2. Axis Crosshair (Origin)
+      ctx.strokeStyle = 'rgba(0, 240, 255, 0.25)';
+      ctx.beginPath(); ctx.moveTo(cx, 0); ctx.lineTo(cx, h); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(0, cy); ctx.lineTo(w, cy); ctx.stroke();
+
+      ctx.fillStyle = 'rgba(0, 240, 255, 0.5)';
+      ctx.font = '9px JetBrains Mono, monospace';
+      ctx.fillText('(0,0)', cx + 4, cy - 4);
+
+      // 3. Robot Position
+      const rx = cx + botX * scale;
+      const ry = cy - botY * scale;
+
+      // 4. Sonar Rays from Robot
+      if (distances && distances.length >= 4) {
+        const offsets = [0, 90, 180, 270]; // Front, Right, Back, Left
+        distances.forEach((dist, i) => {
+          const clamped = Math.min(dist, 140);
+          const rad = (yawDeg + offsets[i] - 90) * (Math.PI / 180);
+          const tx = rx + clamped * scale * Math.cos(rad);
+          const ty = ry + clamped * scale * Math.sin(rad);
+
+          ctx.strokeStyle = dist < 25 ? 'rgba(239, 68, 68, 0.7)' : 'rgba(0, 240, 255, 0.25)';
+          ctx.lineWidth = 1.5;
+          ctx.setLineDash([3, 3]);
+          ctx.beginPath(); ctx.moveTo(rx, ry); ctx.lineTo(tx, ty); ctx.stroke();
+          ctx.setLineDash([]);
+
+          ctx.fillStyle = dist < 25 ? '#EF4444' : '#00F0FF';
+          ctx.beginPath(); ctx.arc(tx, ty, dist < 25 ? 4 : 2.5, 0, Math.PI * 2); ctx.fill();
+        });
+      }
+
+      // 5. Robot Chassis
+      ctx.save();
+      ctx.translate(rx, ry);
+      ctx.rotate(yawDeg * (Math.PI / 180));
+
+      ctx.fillStyle = '#1E293B';
+      ctx.strokeStyle = '#00F0FF';
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      if (typeof ctx.roundRect === 'function') {
+        ctx.roundRect(-12, -16, 24, 32, 4);
+      } else {
+        ctx.rect(-12, -16, 24, 32);
+      }
+      ctx.fill();
+      ctx.stroke();
+
+      // Treads
+      ctx.fillStyle = '#475569';
+      ctx.fillRect(-15, -14, 3, 28);
+      ctx.fillRect(12, -14, 3, 28);
+
+      // Forward Indicator
+      ctx.fillStyle = '#00F0FF';
+      ctx.beginPath();
+      ctx.moveTo(0, -14);
+      ctx.lineTo(5, -6);
+      ctx.lineTo(-5, -6);
+      ctx.closePath();
+      ctx.fill();
+
+      ctx.restore();
+    }
+
+    function resetHeadingOnly() {
+      fetch('/api/imu/reset', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ yaw: 0 })
+      }).then(fetchStatus);
+    }
+
+    function resetOriginOnly() {
+      fetch('/api/imu/reset', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ x: 0, y: 0 })
+      }).then(fetchStatus);
+    }
+
+    function promptCustomPose() {
+      const input = prompt('Enter pose as: X, Y, Yaw (e.g. 10, 20, 90):', '0, 0, 0');
+      if (!input) return;
+      const parts = input.split(',').map(s => parseFloat(s.trim()));
+      if (parts.length >= 3 && !isNaN(parts[0]) && !isNaN(parts[1]) && !isNaN(parts[2])) {
+        fetch('/api/imu/reset', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ x: parts[0], y: parts[1], yaw: parts[2] })
+        }).then(fetchStatus);
+      } else if (parts.length >= 1 && !isNaN(parts[0])) {
+        fetch('/api/imu/reset', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ yaw: parts[0] })
+        }).then(fetchStatus);
+      }
+    }
+
+    window.addEventListener('DOMContentLoaded', () => {
+      const canvas = document.getElementById('arenaCanvas');
+      if (canvas) {
+        canvas.addEventListener('click', (e) => {
+          const rect = canvas.getBoundingClientRect();
+          const clickX = e.clientX - rect.left;
+          const clickY = e.clientY - rect.top;
+          const scaleX = canvas.width / rect.width;
+          const scaleY = canvas.height / rect.height;
+          const cx = canvas.width / 2;
+          const cy = canvas.height / 2;
+          const scale = 0.8;
+
+          const newX = ((clickX * scaleX) - cx) / scale;
+          const newY = (cy - (clickY * scaleY)) / scale;
+
+          fetch('/api/imu/reset', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ x: Math.round(newX * 10) / 10, y: Math.round(newY * 10) / 10 })
+          }).then(fetchStatus);
+        });
+      }
+    });
+
 
     // Keyboard support
     window.addEventListener('keydown', (e) => {
@@ -727,6 +1066,7 @@ void WebAdminManager::setupRoutes() {
     server.on("/api/estop", HTTP_POST, [this]() { handleApiEstop(); });
     server.on("/api/mode", HTTP_POST, [this]() { handleApiMode(); });
     server.on("/api/config", HTTP_POST, [this]() { handleApiConfig(); });
+    server.on("/api/imu/reset", HTTP_POST, [this]() { handleApiImuReset(); });
 
     server.onNotFound([]() {
         webAdmin.server.send(404, "text/plain", "Not Found");
@@ -741,7 +1081,7 @@ void WebAdminManager::handleApiStatus() {
 #if ARDUINOJSON_VERSION_MAJOR >= 7
     JsonDocument doc;
 #else
-    StaticJsonDocument<384> doc;
+    StaticJsonDocument<512> doc;
 #endif
 
     if (activeMode == MODE_PI_OVERRIDE) doc["mode"] = "PI_OVERRIDE";
@@ -751,6 +1091,20 @@ void WebAdminManager::handleApiStatus() {
     doc["estop"] = motors.isEmergencyStopped();
     doc["threshold"] = evasion.getThreshold();
     doc["speed"] = motors.getBaseSpeed();
+    doc["tap_on"] = motors.getTapOnMs();
+    doc["tap_off"] = motors.getTapOffMs();
+
+    // IMU & 6-DOF Telemetry
+    doc["yaw"] = round(imu.getYaw() * 10.0f) / 10.0f;
+    doc["pitch"] = round(imu.getPitch() * 10.0f) / 10.0f;
+    doc["roll"] = round(imu.getRoll() * 10.0f) / 10.0f;
+    doc["rate_z"] = round(imu.getAngularVelocityZ() * 10.0f) / 10.0f;
+    doc["imu_conn"] = imu.isConnected();
+
+    // Position Odometry (Dead-reckoning)
+    doc["x"] = round(imu.getPosX() * 10.0f) / 10.0f;
+    doc["y"] = round(imu.getPosY() * 10.0f) / 10.0f;
+    doc["dist"] = round(imu.getTotalDistance() * 10.0f) / 10.0f;
 
     JsonArray d = doc.createNestedArray("d");
     for (int i = 0; i < NUM_ULTRASONIC_SENSORS; i++) {
@@ -869,6 +1223,53 @@ void WebAdminManager::handleApiConfig() {
     if (doc.containsKey("speed")) {
         uint8_t spd = doc["speed"].as<uint8_t>();
         motors.setBaseSpeed(spd);
+    }
+    if (doc.containsKey("tap_on") || doc.containsKey("tap_off")) {
+        uint16_t onMs = doc["tap_on"] | motors.getTapOnMs();
+        uint16_t offMs = doc["tap_off"] | motors.getTapOffMs();
+        motors.setTapTiming(onMs, offMs);
+    }
+
+    server.send(200, "application/json", "{\"status\":\"ok\"}");
+}
+
+void WebAdminManager::handleApiImuReset() {
+    float yaw = 0.0f;
+    float x = 0.0f;
+    float y = 0.0f;
+    bool hasYaw = false;
+    bool hasPos = false;
+
+    if (server.hasArg("plain")) {
+#if ARDUINOJSON_VERSION_MAJOR >= 7
+        JsonDocument doc;
+#else
+        StaticJsonDocument<128> doc;
+#endif
+        deserializeJson(doc, server.arg("plain"));
+        if (doc.containsKey("yaw")) {
+            yaw = doc["yaw"].as<float>();
+            hasYaw = true;
+        }
+        if (doc.containsKey("x") || doc.containsKey("y")) {
+            x = doc["x"] | imu.getPosX();
+            y = doc["y"] | imu.getPosY();
+            hasPos = true;
+        }
+    } else {
+        hasYaw = true;
+        hasPos = true;
+    }
+
+    if (hasYaw && hasPos) {
+        imu.setPose(x, y, yaw);
+    } else if (hasYaw) {
+        imu.resetHeading(yaw);
+    } else if (hasPos) {
+        imu.resetPosition(x, y);
+    } else {
+        imu.resetHeading(0.0f);
+        imu.resetPosition(0.0f, 0.0f);
     }
 
     server.send(200, "application/json", "{\"status\":\"ok\"}");

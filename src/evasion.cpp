@@ -10,15 +10,23 @@ EvasionManager::EvasionManager()
     : thresholdDistance(DEFAULT_THRESHOLD_CM),
       currentState(STATE_CLEAR_IDLE),
       currentStatus(STATUS_CLEAR),
+      threatOrigin(STATUS_CLEAR),
+      activeTapCmd(CMD_STOP),
+      currentTapPhase(TAP_PHASE_PULSE),
       targetYaw(0.0f),
-      stateStartTime(0) {}
+      phaseStartTime(0),
+      consecutiveTaps(0) {}
 
 void EvasionManager::init() {
     thresholdDistance = DEFAULT_THRESHOLD_CM;
     currentState = STATE_CLEAR_IDLE;
     currentStatus = STATUS_CLEAR;
+    threatOrigin = STATUS_CLEAR;
+    activeTapCmd = CMD_STOP;
+    currentTapPhase = TAP_PHASE_PULSE;
     targetYaw = 0.0f;
-    stateStartTime = millis();
+    phaseStartTime = millis();
+    consecutiveTaps = 0;
 }
 
 void EvasionManager::setThreshold(float cm) {
@@ -41,6 +49,10 @@ float EvasionManager::getTargetYaw() const {
     return targetYaw;
 }
 
+uint8_t EvasionManager::getTapCount() const {
+    return consecutiveTaps;
+}
+
 void EvasionManager::update() {
     executeEvadeStateMachine();
 }
@@ -50,157 +62,158 @@ void EvasionManager::executeEvadeStateMachine() {
 
     switch (currentState) {
         case STATE_CLEAR_IDLE: {
+            motors.stop();
+            consecutiveTaps = 0;
+
             if (currentStatus == STATUS_ALL_SIDES_TRAPPED) {
                 currentState = STATE_TRAPPED;
-                stateStartTime = millis();
-                motors.stop();
+                phaseStartTime = millis();
             } else if (currentStatus == STATUS_OBJECT_IN_REAR) {
-                // Rear blocked: drive forward away from rear obstacle if front is open
+                // Rear threat detected: tap forward away from rear obstacle if front is clear
                 if (!sensors.isFrontBlocked(thresholdDistance)) {
-                    currentState = STATE_PUSHING_CLEAR;
-                    stateStartTime = millis();
-                    motors.forward(EVADE_SPEED);
+                    currentState = STATE_TAP_FORWARD;
+                    currentTapPhase = TAP_PHASE_PULSE;
+                    activeTapCmd = CMD_FORWARD;
+                    threatOrigin = STATUS_OBJECT_IN_REAR;
+                    consecutiveTaps = 1;
+                    phaseStartTime = millis();
+                    motors.singleTap(CMD_FORWARD);
                 } else {
-                    // Both front and rear blocked -> rotate to open side
-                    float bestOffset = sensors.getBestClearanceAngle(thresholdDistance);
-                    targetYaw = imu.getYaw() + bestOffset;
-                    while (targetYaw > 180.0f) targetYaw -= 360.0f;
-                    while (targetYaw < -180.0f) targetYaw += 360.0f;
-
-                    currentState = STATE_ROTATING_TO_BEST_ANGLE;
-                    stateStartTime = millis();
+                    // Both front and rear tight -> tap rotate toward more open flank
+                    currentState = STATE_TAP_ROTATING;
+                    currentTapPhase = TAP_PHASE_PULSE;
+                    activeTapCmd = (sensors.getDistance(1) > sensors.getDistance(3)) ? CMD_ROTATE_RIGHT : CMD_ROTATE_LEFT;
+                    threatOrigin = STATUS_OBJECT_IN_FRONT;
+                    consecutiveTaps = 1;
+                    phaseStartTime = millis();
+                    motors.singleTap(activeTapCmd);
                 }
             } else if (currentStatus == STATUS_OBJECT_ON_LEFT) {
-                // Left blocked: rotate right away from the obstacle
-                float bestOffset = sensors.getBestClearanceAngle(thresholdDistance);
-                if (bestOffset < 30.0f) bestOffset = 60.0f; // Force turn to right
-                targetYaw = imu.getYaw() + bestOffset;
-                while (targetYaw > 180.0f) targetYaw -= 360.0f;
-                while (targetYaw < -180.0f) targetYaw += 360.0f;
-
-                currentState = STATE_ROTATING_TO_BEST_ANGLE;
-                stateStartTime = millis();
+                // Left threat detected: tap turn RIGHT away from obstacle
+                currentState = STATE_TAP_ROTATING;
+                currentTapPhase = TAP_PHASE_PULSE;
+                activeTapCmd = CMD_ROTATE_RIGHT;
+                threatOrigin = STATUS_OBJECT_ON_LEFT;
+                consecutiveTaps = 1;
+                phaseStartTime = millis();
+                motors.singleTap(CMD_ROTATE_RIGHT);
             } else if (currentStatus == STATUS_OBJECT_ON_RIGHT) {
-                // Right blocked: rotate left away from the obstacle
-                float bestOffset = sensors.getBestClearanceAngle(thresholdDistance);
-                if (bestOffset > -30.0f) bestOffset = -60.0f; // Force turn to left
-                targetYaw = imu.getYaw() + bestOffset;
-                while (targetYaw > 180.0f) targetYaw -= 360.0f;
-                while (targetYaw < -180.0f) targetYaw += 360.0f;
+                // Right threat detected: tap turn LEFT away from obstacle
+                currentState = STATE_TAP_ROTATING;
+                currentTapPhase = TAP_PHASE_PULSE;
+                activeTapCmd = CMD_ROTATE_LEFT;
+                threatOrigin = STATUS_OBJECT_ON_RIGHT;
+                consecutiveTaps = 1;
+                phaseStartTime = millis();
+                motors.singleTap(CMD_ROTATE_LEFT);
+            } else if (currentStatus == STATUS_OBJECT_IN_FRONT || currentStatus == STATUS_OBJECT_BOTH_SIDES) {
+                // Front or both flanks threat: tap rotate away to more open flank
+                currentState = STATE_TAP_ROTATING;
+                currentTapPhase = TAP_PHASE_PULSE;
+                activeTapCmd = (sensors.getDistance(1) > sensors.getDistance(3)) ? CMD_ROTATE_RIGHT : CMD_ROTATE_LEFT;
+                threatOrigin = STATUS_OBJECT_IN_FRONT;
+                consecutiveTaps = 1;
+                phaseStartTime = millis();
+                motors.singleTap(activeTapCmd);
+            } else {
+                // Path clear: hold stationary position
+                motors.stop();
+            }
+            break;
+        }
 
-                currentState = STATE_ROTATING_TO_BEST_ANGLE;
-                stateStartTime = millis();
-            } else if (currentStatus == STATUS_OBJECT_BOTH_SIDES) {
-                // Two sides blocked -> calculate best escape corridor using vector clearance
-                float bestOffset = sensors.getBestClearanceAngle(thresholdDistance);
-                targetYaw = imu.getYaw() + bestOffset;
-                while (targetYaw > 180.0f) targetYaw -= 360.0f;
-                while (targetYaw < -180.0f) targetYaw += 360.0f;
+        case STATE_TAP_ROTATING: {
+            uint32_t now = millis();
 
-                currentState = STATE_ROTATING_TO_BEST_ANGLE;
-                stateStartTime = millis();
-            } else if (currentStatus == STATUS_OBJECT_IN_FRONT) {
-                // Front blocked: rotate to best clearance angle
-                float bestOffset = sensors.getBestClearanceAngle(thresholdDistance);
-                if (fabs(bestOffset) < 30.0f) {
-                    bestOffset = (sensors.getDistance(1) > sensors.getDistance(3)) ? 75.0f : -75.0f;
+            if (currentTapPhase == TAP_PHASE_PULSE) {
+                // Relay pulse phase: single tap energized for tapOnMs
+                if (now - phaseStartTime >= motors.getTapOnMs()) {
+                    motors.stop(); // De-energize relay
+                    currentTapPhase = TAP_PHASE_MEASURE;
+                    phaseStartTime = now;
                 }
-                targetYaw = imu.getYaw() + bestOffset;
-                while (targetYaw > 180.0f) targetYaw -= 360.0f;
-                while (targetYaw < -180.0f) targetYaw += 360.0f;
-
-                currentState = STATE_ROTATING_TO_BEST_ANGLE;
-                stateStartTime = millis();
             } else {
-                // No obstacles inside threshold: hold position / stop
-                motors.stop();
-            }
-            break;
-        }
+                // Rest / Coast phase: relays OFF, chassis still, ultrasonic sensor measures cleanly
+                if (now - phaseStartTime >= motors.getTapOffMs()) {
+                    // --- CHECK MEASURE ---
+                    bool threatCleared = false;
 
-        case STATE_BACKING_UP: {
-            // Check if front distance is now safely beyond threshold
-            if (!sensors.isFrontBlocked(thresholdDistance)) {
-                motors.stop();
-                currentState = STATE_CLEAR_IDLE;
-            } else if (sensors.isRearBlocked(CRITICAL_STOP_CM) || (millis() - stateStartTime > 3500)) {
-                // Rear obstacle reached or timeout -> switch to rotation
-                float bestOffset = sensors.getBestClearanceAngle(thresholdDistance);
-                targetYaw = imu.getYaw() + bestOffset;
-                while (targetYaw > 180.0f) targetYaw -= 360.0f;
-                while (targetYaw < -180.0f) targetYaw += 360.0f;
+                    if (threatOrigin == STATUS_OBJECT_ON_LEFT) {
+                        threatCleared = !sensors.isLeftBlocked(thresholdDistance);
+                    } else if (threatOrigin == STATUS_OBJECT_ON_RIGHT) {
+                        threatCleared = !sensors.isRightBlocked(thresholdDistance);
+                    } else {
+                        // Front or both sides
+                        threatCleared = !sensors.isFrontBlocked(thresholdDistance);
+                    }
 
-                currentState = STATE_ROTATING_TO_BEST_ANGLE;
-                stateStartTime = millis();
-            } else {
-                motors.backward(EVADE_SPEED);
-            }
-            break;
-        }
-
-        case STATE_ROTATING_TO_BEST_ANGLE: {
-            float err = imu.getHeadingError(targetYaw);
-
-            // Reached target angle within +/- 6 degrees, or rotation timeout (2.0s with IMU, 500ms without IMU)
-            bool turnComplete = false;
-            if (imu.isConnected()) {
-                turnComplete = (fabs(err) < 6.0f) || (millis() - stateStartTime > 2000);
-            } else {
-                turnComplete = (millis() - stateStartTime > 500);
-            }
-
-            if (turnComplete) {
-                motors.stop();
-                currentState = STATE_PUSHING_CLEAR;
-                stateStartTime = millis();
-            } else {
-                // Closed-loop gyro rotation: speed scales with angular error
-                uint8_t spd = (uint8_t)constrain((int)(fabs(err) * 2.5f + 140.0f), 140, (int)TURN_SPEED);
-                if (err > 0) {
-                    // Turn right (clockwise)
-                    motors.rotateRight(spd);
-                } else {
-                    // Turn left (counter-clockwise)
-                    motors.rotateLeft(spd);
+                    if (threatCleared) {
+                        // Obstacle cleared the threshold: evasion complete!
+                        motors.stop();
+                        currentState = STATE_CLEAR_IDLE;
+                        consecutiveTaps = 0;
+                    } else if (consecutiveTaps >= 10) {
+                        // Safety guard: max 10 taps reached, return to idle evaluation
+                        motors.stop();
+                        currentState = STATE_CLEAR_IDLE;
+                        consecutiveTaps = 0;
+                    } else {
+                        // --- REPEAT ---
+                        // Obstacle still present: execute next controlled tap pulse
+                        consecutiveTaps++;
+                        currentTapPhase = TAP_PHASE_PULSE;
+                        phaseStartTime = now;
+                        motors.singleTap(activeTapCmd);
+                    }
                 }
             }
             break;
         }
 
-        case STATE_PUSHING_CLEAR: {
-            // Push forward along the newly oriented escape path for 1.0 second
-            if (sensors.isFrontBlocked(CRITICAL_STOP_CM)) {
-                // Front blocked; stop immediately
-                motors.stop();
-                currentState = STATE_CLEAR_IDLE;
-            } else if (millis() - stateStartTime > 1000) {
-                // Push window finished; return to idle evaluation
-                motors.stop();
-                currentState = STATE_CLEAR_IDLE;
+        case STATE_TAP_FORWARD: {
+            uint32_t now = millis();
+
+            if (currentTapPhase == TAP_PHASE_PULSE) {
+                // Relay pulse phase: forward energized for tapOnMs
+                if (now - phaseStartTime >= motors.getTapOnMs()) {
+                    motors.stop(); // De-energize relays
+                    currentTapPhase = TAP_PHASE_MEASURE;
+                    phaseStartTime = now;
+                }
             } else {
-                motors.forward(EVADE_SPEED);
+                // Rest / Coast phase: relays OFF, chassis still, ultrasonic sensor measures cleanly
+                if (now - phaseStartTime >= motors.getTapOffMs()) {
+                    // --- CHECK MEASURE ---
+                    bool frontHazard = sensors.isFrontBlocked(CRITICAL_STOP_CM);
+                    bool rearCleared = !sensors.isRearBlocked(thresholdDistance);
+
+                    if (frontHazard || rearCleared) {
+                        // Rear cleared or front danger reached: halt
+                        motors.stop();
+                        currentState = STATE_CLEAR_IDLE;
+                        consecutiveTaps = 0;
+                    } else if (consecutiveTaps >= 8) {
+                        // Safety guard: max 8 forward taps reached
+                        motors.stop();
+                        currentState = STATE_CLEAR_IDLE;
+                        consecutiveTaps = 0;
+                    } else {
+                        // --- REPEAT ---
+                        // Rear still blocked and front path open: execute next forward tap
+                        consecutiveTaps++;
+                        currentTapPhase = TAP_PHASE_PULSE;
+                        phaseStartTime = now;
+                        motors.singleTap(CMD_FORWARD);
+                    }
+                }
             }
             break;
         }
 
         case STATE_TRAPPED: {
-            // All sides within threshold field
             motors.stop();
-
-            // Recheck if space has opened
             if (!sensors.isTrapped(thresholdDistance)) {
                 currentState = STATE_CLEAR_IDLE;
-            } else {
-                // Attempt to maximize distance from all sensors:
-                // If there's an angular gradient with better clearance, face towards it
-                float bestOffset = sensors.getBestClearanceAngle(thresholdDistance);
-                if (fabs(bestOffset) > 25.0f && (millis() - stateStartTime > 1500)) {
-                    targetYaw = imu.getYaw() + bestOffset;
-                    while (targetYaw > 180.0f) targetYaw -= 360.0f;
-                    while (targetYaw < -180.0f) targetYaw += 360.0f;
-                    currentState = STATE_ROTATING_TO_BEST_ANGLE;
-                    stateStartTime = millis();
-                }
             }
             break;
         }
