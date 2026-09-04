@@ -2,36 +2,54 @@
 #include <math.h>
 
 static const uint8_t ECHO_PINS[NUM_ULTRASONIC_SENSORS] = {
-    PIN_US_ECHO_0,
-    PIN_US_ECHO_1,
-    PIN_US_ECHO_2,
-    PIN_US_ECHO_3
+    PIN_US_ECHO_0, // S0: 0°   (Front)
+    PIN_US_ECHO_1, // S1: 90°  (Right)
+    PIN_US_ECHO_2, // S2: 180° (Back)
+    PIN_US_ECHO_3, // S3: 270° (Left)
+    PIN_US_ECHO_4, // S4: 45°  (Front-Right)
+    PIN_US_ECHO_5, // S5: 135° (Back-Right)
+    PIN_US_ECHO_6, // S6: 225° (Back-Left)
+    PIN_US_ECHO_7  // S7: 315° (Front-Left)
 };
 
-// Sector angles in degrees (Front: 0°, Right: 90°, Back: 180°, Left: -90° / 270°)
+// Sector angles in degrees (Set 1: Cardinal, Set 2: Diagonal)
 static const float SENSOR_ANGLES_DEG[NUM_ULTRASONIC_SENSORS] = {
-    0.0f, 90.0f, 180.0f, -90.0f
+    0.0f, 90.0f, 180.0f, -90.0f,
+    45.0f, 135.0f, -135.0f, -45.0f
 };
 
 volatile uint32_t SensorsManager::echoStartMicros[NUM_ULTRASONIC_SENSORS] = {0};
 volatile uint32_t SensorsManager::echoDurationMicros[NUM_ULTRASONIC_SENSORS] = {0};
 volatile bool SensorsManager::echoReceived[NUM_ULTRASONIC_SENSORS] = {false};
 
-// Forward declare individual ISRs
+// Forward declare individual ISRs for 8 sensors
 void IRAM_ATTR isr0() { SensorsManager::handleEchoChange(0); }
 void IRAM_ATTR isr1() { SensorsManager::handleEchoChange(1); }
 void IRAM_ATTR isr2() { SensorsManager::handleEchoChange(2); }
 void IRAM_ATTR isr3() { SensorsManager::handleEchoChange(3); }
+void IRAM_ATTR isr4() { SensorsManager::handleEchoChange(4); }
+void IRAM_ATTR isr5() { SensorsManager::handleEchoChange(5); }
+void IRAM_ATTR isr6() { SensorsManager::handleEchoChange(6); }
+void IRAM_ATTR isr7() { SensorsManager::handleEchoChange(7); }
 
 SensorsManager sensors;
 
-SensorsManager::SensorsManager() : lastTriggerTime(0), triggerPending(false) {
+SensorsManager::SensorsManager()
+    : lastTriggerTime(0), triggerPending(false), diagonalSetEnabled(false) {
     for (int i = 0; i < NUM_ULTRASONIC_SENSORS; i++) {
         smoothedDistances[i] = MAX_SENSOR_DISTANCE_CM;
         rawHistory[i][0] = MAX_SENSOR_DISTANCE_CM;
         rawHistory[i][1] = MAX_SENSOR_DISTANCE_CM;
         sampleCount[i] = 0;
     }
+}
+
+void SensorsManager::setDiagonalSetEnabled(bool enabled) {
+    diagonalSetEnabled = enabled;
+}
+
+bool SensorsManager::isDiagonalSetEnabled() const {
+    return diagonalSetEnabled;
 }
 
 void IRAM_ATTR SensorsManager::handleEchoChange(uint8_t index) {
@@ -53,7 +71,7 @@ void SensorsManager::init() {
     pinMode(PIN_US_TRIG_2, OUTPUT);
     digitalWrite(PIN_US_TRIG_2, LOW);
 
-    // Attach interrupt to each echo pin
+    // Attach interrupts for Set 1 (Cardinal: S0..S3)
     pinMode(ECHO_PINS[0], INPUT);
     attachInterrupt(digitalPinToInterrupt(ECHO_PINS[0]), isr0, CHANGE);
 
@@ -65,6 +83,19 @@ void SensorsManager::init() {
 
     pinMode(ECHO_PINS[3], INPUT);
     attachInterrupt(digitalPinToInterrupt(ECHO_PINS[3]), isr3, CHANGE);
+
+    // Attach interrupts for Set 2 (Diagonal: S4..S7)
+    pinMode(ECHO_PINS[4], INPUT);
+    attachInterrupt(digitalPinToInterrupt(ECHO_PINS[4]), isr4, CHANGE);
+
+    pinMode(ECHO_PINS[5], INPUT);
+    attachInterrupt(digitalPinToInterrupt(ECHO_PINS[5]), isr5, CHANGE);
+
+    pinMode(ECHO_PINS[6], INPUT);
+    attachInterrupt(digitalPinToInterrupt(ECHO_PINS[6]), isr6, CHANGE);
+
+    pinMode(ECHO_PINS[7], INPUT);
+    attachInterrupt(digitalPinToInterrupt(ECHO_PINS[7]), isr7, CHANGE);
 }
 
 void SensorsManager::triggerPulse() {
@@ -145,21 +176,37 @@ const float* SensorsManager::getAllDistances() const {
     return smoothedDistances;
 }
 
-// Check sectors (4 sensors @ 90°: 0:Front, 1:Right, 2:Back, 3:Left)
+// Check sectors: Set 1 (0:Front, 1:Right, 2:Back, 3:Left) + Optional Set 2 (4:FR, 5:BR, 6:BL, 7:FL)
 bool SensorsManager::isFrontBlocked(float threshold) const {
-    return (smoothedDistances[0] < threshold);
+    if (smoothedDistances[0] < threshold) return true;
+    if (diagonalSetEnabled && (smoothedDistances[4] < threshold || smoothedDistances[7] < threshold)) {
+        return true;
+    }
+    return false;
 }
 
 bool SensorsManager::isRightBlocked(float threshold) const {
-    return (smoothedDistances[1] < threshold);
+    if (smoothedDistances[1] < threshold) return true;
+    if (diagonalSetEnabled && (smoothedDistances[4] < threshold || smoothedDistances[5] < threshold)) {
+        return true;
+    }
+    return false;
 }
 
 bool SensorsManager::isRearBlocked(float threshold) const {
-    return (smoothedDistances[2] < threshold);
+    if (smoothedDistances[2] < threshold) return true;
+    if (diagonalSetEnabled && (smoothedDistances[5] < threshold || smoothedDistances[6] < threshold)) {
+        return true;
+    }
+    return false;
 }
 
 bool SensorsManager::isLeftBlocked(float threshold) const {
-    return (smoothedDistances[3] < threshold);
+    if (smoothedDistances[3] < threshold) return true;
+    if (diagonalSetEnabled && (smoothedDistances[6] < threshold || smoothedDistances[7] < threshold)) {
+        return true;
+    }
+    return false;
 }
 
 bool SensorsManager::isBothSidesBlocked(float threshold) const {
@@ -167,14 +214,15 @@ bool SensorsManager::isBothSidesBlocked(float threshold) const {
 }
 
 bool SensorsManager::isTrapped(float threshold) const {
-    // Trapped if Front, Rear, and Both Sides are blocked or >= 3 sensors are within threshold
+    uint8_t limit = diagonalSetEnabled ? 8 : 4;
+    uint8_t reqBlocked = diagonalSetEnabled ? 4 : 3;
     uint8_t blockedCount = 0;
-    for (int i = 0; i < NUM_ULTRASONIC_SENSORS; i++) {
+    for (int i = 0; i < limit; i++) {
         if (smoothedDistances[i] < threshold) {
             blockedCount++;
         }
     }
-    if (blockedCount >= 3) return true;
+    if (blockedCount >= reqBlocked) return true;
     return (isFrontBlocked(threshold) && isRearBlocked(threshold) && isBothSidesBlocked(threshold));
 }
 
@@ -182,8 +230,9 @@ float SensorsManager::getBestClearanceAngle(float threshold) const {
     // 1. Vector field approach: Repulsion from obstacles
     float repulseX = 0.0f;
     float repulseY = 0.0f;
+    uint8_t limit = diagonalSetEnabled ? 8 : 4;
 
-    for (int i = 0; i < NUM_ULTRASONIC_SENSORS; i++) {
+    for (int i = 0; i < limit; i++) {
         float d = smoothedDistances[i];
         if (d < threshold * 1.5f) { // Consider anything within 1.5x threshold
             float rad = SENSOR_ANGLES_DEG[i] * (PI / 180.0f);
@@ -198,7 +247,7 @@ float SensorsManager::getBestClearanceAngle(float threshold) const {
         // Find single sensor with maximum distance
         int maxIdx = 0;
         float maxD = -1.0f;
-        for (int i = 0; i < NUM_ULTRASONIC_SENSORS; i++) {
+        for (int i = 0; i < limit; i++) {
             if (smoothedDistances[i] > maxD) {
                 maxD = smoothedDistances[i];
                 maxIdx = i;

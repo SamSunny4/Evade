@@ -282,33 +282,71 @@ static const char INDEX_HTML[] PROGMEM = R"rawliteral(
       filter: grayscale(0.8);
     }
 
-    /* ULTRASONIC RADAR COMPASS */
-    .sensor-compass {
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      gap: 8px;
-      margin: 4px 0 2px 0;
+    /* STALL SAFETY ALERT BANNER */
+    .stall-alert-banner {
+      background: rgba(239, 68, 68, 0.2);
+      border: 1px solid var(--red-neon);
+      color: #FCA5A5;
+      padding: 8px 12px;
+      border-radius: 8px;
+      font-size: 11px;
+      font-weight: 800;
+      text-align: center;
+      margin-top: 8px;
+      display: none;
+      animation: pulseAlert 0.7s infinite alternate;
+      letter-spacing: 0.5px;
     }
 
-    .sensor-mid-row {
-      display: flex;
+    /* ULTRASONIC 8-DIRECTIONAL COMPASS GRID */
+    .sensor-compass-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr 1fr;
+      gap: 6px;
+      margin: 6px 0 2px 0;
       align-items: center;
-      justify-content: space-between;
-      width: 100%;
-      gap: 8px;
     }
 
     .sensor-node {
       background: rgba(255, 255, 255, 0.03);
       border: 1px solid var(--border-color);
-      border-radius: 14px;
-      padding: 8px 12px;
+      border-radius: 10px;
+      padding: 6px 4px;
       display: flex;
       flex-direction: column;
       align-items: center;
-      min-width: 104px;
       transition: all 0.2s ease;
+      min-width: 0;
+      overflow: hidden;
+    }
+
+    .sensor-corner {
+      opacity: 0.35;
+      filter: grayscale(0.8);
+      border-style: dashed;
+    }
+
+    .sensor-corner.active-diag {
+      opacity: 1;
+      filter: none;
+      border-style: solid;
+    }
+
+    .btn-diag-toggle {
+      background: rgba(167, 139, 250, 0.15);
+      border: 1px solid rgba(167, 139, 250, 0.4);
+      color: #C4B5FD;
+      border-radius: 6px;
+      padding: 3px 8px;
+      font-size: 10px;
+      font-weight: 700;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    .btn-diag-toggle.active {
+      background: rgba(167, 139, 250, 0.4);
+      color: #FFF;
+      box-shadow: 0 0 10px rgba(167, 139, 250, 0.5);
     }
 
     .sensor-node.warning {
@@ -502,48 +540,69 @@ static const char INDEX_HTML[] PROGMEM = R"rawliteral(
         <span>⚡</span> RESET & RESUME MOTORS
       </button>
     </div>
+    <div style="text-align: center; font-size: 11px; color: var(--text-secondary); margin-top: 6px;">⌨️ Tap <b>[SPACE]</b> for quick E-Stop / Resume</div>
+    <div class="stall-alert-banner" id="stallAlert">⚠️ STALL DETECTED: THROTTLE ACTIVE WITH NO ACCELERATION (1S E-STOP)</div>
 
     <!-- ULTRASONIC SENSOR RADAR CARD -->
     <div class="card" id="radarCard">
       <div class="card-title" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
-        <span>4-Axis Ultrasonic Radar</span>
-        <span id="obstacleAlert" style="color: var(--emerald-neon); font-size: 11px; font-weight: 700; letter-spacing: 0.5px;">PATH CLEAR</span>
+        <span>Ultrasonic Radar</span>
+        <div style="display: flex; gap: 8px; align-items: center;">
+          <button class="btn-diag-toggle" id="btnDiagToggle" onclick="toggleDiagonalSensors()">⚡ 8-SENSOR: OFF</button>
+          <span id="obstacleAlert" style="color: var(--emerald-neon); font-size: 11px; font-weight: 700; letter-spacing: 0.5px;">PATH CLEAR</span>
+        </div>
       </div>
 
-      <div class="sensor-compass">
-        <!-- FRONT S0 -->
+      <div class="sensor-compass-grid">
+        <!-- ROW 1: FL (315°), FRONT (0°), FR (45°) -->
+        <div class="sensor-node sensor-corner" id="nodeFL">
+          <span class="sensor-dir">◤ FL 315°</span>
+          <span class="sensor-val" id="valFL">---</span>
+          <div class="sensor-meter"><div class="meter-bar" id="barFL"></div></div>
+        </div>
         <div class="sensor-node" id="nodeFront">
-          <span class="sensor-dir">▲ FRONT</span>
+          <span class="sensor-dir">▲ FRONT 0°</span>
           <span class="sensor-val" id="valFront">---</span>
           <div class="sensor-meter"><div class="meter-bar" id="barFront"></div></div>
         </div>
-
-        <!-- MID ROW: LEFT S3, CENTER ROBOT ICON, RIGHT S1 -->
-        <div class="sensor-mid-row">
-          <div class="sensor-node" id="nodeLeft">
-            <span class="sensor-dir">◀ LEFT</span>
-            <span class="sensor-val" id="valLeft">---</span>
-            <div class="sensor-meter"><div class="meter-bar" id="barLeft"></div></div>
-          </div>
-
-          <div class="robot-center-icon" id="botCenterIcon">
-            <div class="robot-pulse"></div>
-            <div class="bot-pointer">▲</div>
-            <span>🤖</span>
-          </div>
-
-          <div class="sensor-node" id="nodeRight">
-            <span class="sensor-dir">RIGHT ▶</span>
-            <span class="sensor-val" id="valRight">---</span>
-            <div class="sensor-meter"><div class="meter-bar" id="barRight"></div></div>
-          </div>
+        <div class="sensor-node sensor-corner" id="nodeFR">
+          <span class="sensor-dir">FR 45° ◥</span>
+          <span class="sensor-val" id="valFR">---</span>
+          <div class="sensor-meter"><div class="meter-bar" id="barFR"></div></div>
         </div>
 
-        <!-- BACK S2 -->
+        <!-- ROW 2: LEFT (270°), CENTER ROBOT, RIGHT (90°) -->
+        <div class="sensor-node" id="nodeLeft">
+          <span class="sensor-dir">◀ LEFT 270°</span>
+          <span class="sensor-val" id="valLeft">---</span>
+          <div class="sensor-meter"><div class="meter-bar" id="barLeft"></div></div>
+        </div>
+        <div class="robot-center-icon" id="botCenterIcon" style="justify-self: center;">
+          <div class="robot-pulse"></div>
+          <div class="bot-pointer">▲</div>
+          <span>🤖</span>
+        </div>
+        <div class="sensor-node" id="nodeRight">
+          <span class="sensor-dir">RIGHT 90° ▶</span>
+          <span class="sensor-val" id="valRight">---</span>
+          <div class="sensor-meter"><div class="meter-bar" id="barRight"></div></div>
+        </div>
+
+        <!-- ROW 3: BL (225°), BACK (180°), BR (135°) -->
+        <div class="sensor-node sensor-corner" id="nodeBL">
+          <span class="sensor-dir">◣ BL 225°</span>
+          <span class="sensor-val" id="valBL">---</span>
+          <div class="sensor-meter"><div class="meter-bar" id="barBL"></div></div>
+        </div>
         <div class="sensor-node" id="nodeBack">
-          <div class="sensor-meter"><div class="meter-bar" id="barBack"></div></div>
+          <span class="sensor-dir">▼ BACK 180°</span>
           <span class="sensor-val" id="valBack">---</span>
-          <span class="sensor-dir">▼ BACK</span>
+          <div class="sensor-meter"><div class="meter-bar" id="barBack"></div></div>
+        </div>
+        <div class="sensor-node sensor-corner" id="nodeBR">
+          <span class="sensor-dir">BR 135° ◢</span>
+          <span class="sensor-val" id="valBR">---</span>
+          <div class="sensor-meter"><div class="meter-bar" id="barBR"></div></div>
         </div>
       </div>
       <div class="heading-live-badge" id="headingLiveBadge">YAW: 000.0° (N)</div>
@@ -631,7 +690,7 @@ static const char INDEX_HTML[] PROGMEM = R"rawliteral(
           <span>Evade Threshold</span>
           <span id="threshDisplay">25 cm</span>
         </div>
-        <input type="range" id="threshRange" min="10" max="60" value="25" oninput="updateThresh(this.value)">
+        <input type="range" id="threshRange" min="10" max="100" value="25" oninput="updateThresh(this.value)">
       </div>
     </div>
   </div>
@@ -639,6 +698,7 @@ static const char INDEX_HTML[] PROGMEM = R"rawliteral(
   <script>
     let activeMode = 'WEB_OVERRIDE';
     let isEstop = true;
+    let diagonalEnabled = false;
 
     async function fetchStatus() {
       try {
@@ -673,30 +733,66 @@ static const char INDEX_HTML[] PROGMEM = R"rawliteral(
           }
         }
 
+        // Stall E-Stop safety alert
+        const stallBanner = document.getElementById('stallAlert');
+        if (stallBanner) {
+          stallBanner.style.display = data.stall_estop ? 'block' : 'none';
+        }
+
         // Mode button styling
         document.getElementById('btnModeAuto').classList.toggle('active', activeMode === 'AUTO_EVADE');
         document.getElementById('btnModeWeb').classList.toggle('active', activeMode === 'WEB_OVERRIDE');
         document.getElementById('btnModePi').classList.toggle('active', activeMode === 'PI_OVERRIDE');
 
-        // Update 4-axis ultrasonic sensor readings
+        // Diagonal sensors toggle state
+        if (data.diagonal_enabled !== undefined) {
+          diagonalEnabled = data.diagonal_enabled;
+        }
+        const btnDiag = document.getElementById('btnDiagToggle');
+        if (btnDiag) {
+          btnDiag.innerText = diagonalEnabled ? '⚡ 8-SENSOR: ON' : '⚡ 8-SENSOR: OFF';
+          btnDiag.classList.toggle('active', diagonalEnabled);
+        }
+
+        // Update 8-directional ultrasonic sensor readings
         if (data.d && data.d.length >= 4) {
           const thresh = data.threshold || 25;
-          const sensorsData = [
-            { id: 'Front', dist: data.d[0] },
-            { id: 'Right', dist: data.d[1] },
-            { id: 'Back',  dist: data.d[2] },
-            { id: 'Left',  dist: data.d[3] }
+          const sensorsList = [
+            { id: 'Front', dist: data.d[0], isDiag: false },
+            { id: 'Right', dist: data.d[1], isDiag: false },
+            { id: 'Back',  dist: data.d[2], isDiag: false },
+            { id: 'Left',  dist: data.d[3], isDiag: false }
           ];
+
+          if (data.d.length >= 8) {
+            sensorsList.push(
+              { id: 'FR', dist: data.d[4], isDiag: true },
+              { id: 'BR', dist: data.d[5], isDiag: true },
+              { id: 'BL', dist: data.d[6], isDiag: true },
+              { id: 'FL', dist: data.d[7], isDiag: true }
+            );
+          }
 
           let anyDanger = false;
           let anyWarning = false;
 
-          sensorsData.forEach(s => {
+          sensorsList.forEach(s => {
             const node = document.getElementById('node' + s.id);
             const val = document.getElementById('val' + s.id);
             const bar = document.getElementById('bar' + s.id);
-            const d = s.dist;
+            if (!node || !val || !bar) return;
 
+            if (s.isDiag) {
+              node.classList.toggle('active-diag', diagonalEnabled);
+              if (!diagonalEnabled) {
+                val.innerText = 'OFF';
+                bar.style.width = '0%';
+                node.classList.remove('danger', 'warning');
+                return;
+              }
+            }
+
+            const d = s.dist;
             val.innerText = d >= 300 ? '> 300 cm' : d.toFixed(1) + ' cm';
             const pct = Math.min(100, Math.max(5, (d / 150) * 100));
             bar.style.width = pct + '%';
@@ -716,15 +812,17 @@ static const char INDEX_HTML[] PROGMEM = R"rawliteral(
           });
 
           const alertLbl = document.getElementById('obstacleAlert');
-          if (anyDanger) {
-            alertLbl.innerText = 'OBSTACLE DETECTED';
-            alertLbl.style.color = 'var(--red-neon)';
-          } else if (anyWarning) {
-            alertLbl.innerText = 'PROXIMITY CAUTION';
-            alertLbl.style.color = '#F59E0B';
-          } else {
-            alertLbl.innerText = 'PATH CLEAR';
-            alertLbl.style.color = 'var(--emerald-neon)';
+          if (alertLbl) {
+            if (anyDanger) {
+              alertLbl.innerText = 'OBSTACLE DETECTED';
+              alertLbl.style.color = 'var(--red-neon)';
+            } else if (anyWarning) {
+              alertLbl.innerText = 'PROXIMITY CAUTION';
+              alertLbl.style.color = '#F59E0B';
+            } else {
+              alertLbl.innerText = 'PATH CLEAR';
+              alertLbl.style.color = 'var(--emerald-neon)';
+            }
           }
         }
 
@@ -876,21 +974,35 @@ static const char INDEX_HTML[] PROGMEM = R"rawliteral(
 
       // 4. Sonar Rays from Robot
       if (distances && distances.length >= 4) {
-        const offsets = [0, 90, 180, 270]; // Front, Right, Back, Left
-        distances.forEach((dist, i) => {
-          const clamped = Math.min(dist, 140);
-          const rad = (yawDeg + offsets[i] - 90) * (Math.PI / 180);
+        let activeSensors = [
+          { deg: 0, dist: distances[0] },   // Front
+          { deg: 90, dist: distances[1] },  // Right
+          { deg: 180, dist: distances[2] }, // Back
+          { deg: 270, dist: distances[3] }  // Left
+        ];
+        if (diagonalEnabled && distances.length >= 8) {
+          activeSensors.push(
+            { deg: 45, dist: distances[4] },  // FR
+            { deg: 135, dist: distances[5] }, // BR
+            { deg: 225, dist: distances[6] }, // BL
+            { deg: 315, dist: distances[7] }  // FL
+          );
+        }
+
+        activeSensors.forEach(s => {
+          const clamped = Math.min(s.dist, 140);
+          const rad = (yawDeg + s.deg - 90) * (Math.PI / 180);
           const tx = rx + clamped * scale * Math.cos(rad);
           const ty = ry + clamped * scale * Math.sin(rad);
 
-          ctx.strokeStyle = dist < 25 ? 'rgba(239, 68, 68, 0.7)' : 'rgba(0, 240, 255, 0.25)';
+          ctx.strokeStyle = s.dist < 25 ? 'rgba(239, 68, 68, 0.7)' : 'rgba(0, 240, 255, 0.25)';
           ctx.lineWidth = 1.5;
           ctx.setLineDash([3, 3]);
           ctx.beginPath(); ctx.moveTo(rx, ry); ctx.lineTo(tx, ty); ctx.stroke();
           ctx.setLineDash([]);
 
-          ctx.fillStyle = dist < 25 ? '#EF4444' : '#00F0FF';
-          ctx.beginPath(); ctx.arc(tx, ty, dist < 25 ? 4 : 2.5, 0, Math.PI * 2); ctx.fill();
+          ctx.fillStyle = s.dist < 25 ? '#EF4444' : '#00F0FF';
+          ctx.beginPath(); ctx.arc(tx, ty, s.dist < 25 ? 4 : 2.5, 0, Math.PI * 2); ctx.fill();
         });
       }
 
@@ -926,6 +1038,15 @@ static const char INDEX_HTML[] PROGMEM = R"rawliteral(
       ctx.fill();
 
       ctx.restore();
+    }
+
+    function toggleDiagonalSensors() {
+      diagonalEnabled = !diagonalEnabled;
+      fetch('/api/sensors/mode', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ diagonal: diagonalEnabled })
+      }).then(fetchStatus);
     }
 
     function resetHeadingOnly() {
@@ -989,17 +1110,28 @@ static const char INDEX_HTML[] PROGMEM = R"rawliteral(
     });
 
 
-    // Keyboard support
+    // Keyboard support: Space key for instant E-Stop / Resume
     window.addEventListener('keydown', (e) => {
+      if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+      if (e.key === ' ' || e.code === 'Space') {
+        e.preventDefault();
+        if (isEstop) resumeEstop();
+        else triggerEstop();
+        return;
+      }
       if (e.repeat || isEstop) return;
       if (e.key === 'ArrowUp' || e.key === 'w') sendMove('forward');
       else if (e.key === 'ArrowDown' || e.key === 's') sendMove('backward');
       else if (e.key === 'ArrowLeft' || e.key === 'a') sendMove('left');
       else if (e.key === 'ArrowRight' || e.key === 'd') sendMove('right');
-      else if (e.key === ' ') triggerEstop();
     });
 
     window.addEventListener('keyup', (e) => {
+      if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+      if (e.key === ' ' || e.code === 'Space') {
+        e.preventDefault();
+        return;
+      }
       if (isEstop) return;
       if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'w', 'a', 's', 'd'].includes(e.key)) {
         sendMove('stop');
@@ -1067,6 +1199,7 @@ void WebAdminManager::setupRoutes() {
     server.on("/api/mode", HTTP_POST, [this]() { handleApiMode(); });
     server.on("/api/config", HTTP_POST, [this]() { handleApiConfig(); });
     server.on("/api/imu/reset", HTTP_POST, [this]() { handleApiImuReset(); });
+    server.on("/api/sensors/mode", HTTP_POST, [this]() { handleApiSensorsMode(); });
 
     server.onNotFound([]() {
         webAdmin.server.send(404, "text/plain", "Not Found");
@@ -1089,6 +1222,8 @@ void WebAdminManager::handleApiStatus() {
     else doc["mode"] = "AUTO_EVADE";
 
     doc["estop"] = motors.isEmergencyStopped();
+    doc["stall_estop"] = motors.isStallEstopActive();
+    doc["diagonal_enabled"] = sensors.isDiagonalSetEnabled();
     doc["threshold"] = evasion.getThreshold();
     doc["speed"] = motors.getBaseSpeed();
     doc["tap_on"] = motors.getTapOnMs();
@@ -1270,6 +1405,31 @@ void WebAdminManager::handleApiImuReset() {
     } else {
         imu.resetHeading(0.0f);
         imu.resetPosition(0.0f, 0.0f);
+    }
+
+    server.send(200, "application/json", "{\"status\":\"ok\"}");
+}
+
+void WebAdminManager::handleApiSensorsMode() {
+    if (!server.hasArg("plain")) {
+        server.send(400, "text/plain", "Missing body");
+        return;
+    }
+#if ARDUINOJSON_VERSION_MAJOR >= 7
+    JsonDocument doc;
+#else
+    StaticJsonDocument<128> doc;
+#endif
+    DeserializationError error = deserializeJson(doc, server.arg("plain"));
+    if (error) {
+        server.send(400, "text/plain", "Invalid JSON");
+        return;
+    }
+
+    if (doc.containsKey("diagonal")) {
+        bool diag = doc["diagonal"].as<bool>();
+        sensors.setDiagonalSetEnabled(diag);
+        Serial.printf("[Sensors] Diagonal set (45/135/225/315) %s\n", diag ? "ENABLED (8 Sensors Active)" : "DISABLED (4 Cardinal Sensors)");
     }
 
     server.send(200, "application/json", "{\"status\":\"ok\"}");

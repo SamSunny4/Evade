@@ -8,23 +8,25 @@
 // --- Onboard Status Indicator LED ---
 #define PIN_STATUS_LED         2   // Built-in Blue LED on ESP32 DevKit V1
 
-// --- Ultrasonic Sensors (4-Directional Array @ 90° Spacing) ---
-// Dual Trigger Pins pulse sensors (e.g. Trig 1: GPIO 27, Trig 2: GPIO 14 / D14)
+// --- Ultrasonic Sensors (8-Directional Array) ---
+// Dual Trigger Pins pulse sensors (Trig 1: GPIO 27, Trig 2: GPIO 14 / D14)
 #define PIN_US_TRIG_1          27  // Primary Trigger (GPIO 27)
 #define PIN_US_TRIG_2          14  // Secondary Trigger (GPIO 14 / D14)
 #define PIN_US_TRIG            PIN_US_TRIG_1  // Compatibility alias
 
-// 4 Dedicated Echo Input Pins (90° apart)
-// S0: 0° (Front)
-#define PIN_US_ECHO_0          34
-// S1: 90° (Right)
-#define PIN_US_ECHO_1          35
-// S2: 180° (Back)
-#define PIN_US_ECHO_2          32
-// S3: 270° (Left)
-#define PIN_US_ECHO_3          25
+// Set 1: Cardinal Directions (0°, 90°, 180°, 270°) - Default Active
+#define PIN_US_ECHO_0          34  // S0: 0°   (Front)
+#define PIN_US_ECHO_1          35  // S1: 90°  (Right)
+#define PIN_US_ECHO_2          32  // S2: 180° (Back)
+#define PIN_US_ECHO_3          25  // S3: 270° (Left)
 
-#define NUM_ULTRASONIC_SENSORS 4
+// Set 2: Intercardinal / Diagonal (45°, 135°, 225°, 315°) - Web Toggleable
+#define PIN_US_ECHO_4          36  // S4: 45°  (Front-Right / VP)
+#define PIN_US_ECHO_5          39  // S5: 135° (Back-Right / VN)
+#define PIN_US_ECHO_6          33  // S6: 225° (Back-Left)
+#define PIN_US_ECHO_7          26  // S7: 315° (Front-Left)
+
+#define NUM_ULTRASONIC_SENSORS 8
 
 // --- 2-Channel Relay Module (Left & Right Motors) ---
 // Relay 1 (Channel 1): Left Motor
@@ -63,11 +65,15 @@
 // --- Default Robot Parameters ---
 #define DEFAULT_THRESHOLD_CM   25.0f
 #define MIN_EVADE_THRESHOLD_CM 10.0f
+#define MAX_EVADE_THRESHOLD_CM 100.0f  // Up to 100cm max distance control
 #define CRITICAL_STOP_CM       12.0f
 #define MAX_SENSOR_DISTANCE_CM 300.0f
 #define DEFAULT_SPEED          180
 #define TURN_SPEED             190
 #define EVADE_SPEED            170
+
+// --- Stall Safety Watchdog ---
+#define STALL_ESTOP_DURATION_MS 1000   // 1 second E-Stop when throttle is on without acceleration
 
 // --- Relay Pulse / Tap Parameters ---
 #define DEFAULT_TAP_ON_MS      60   // Relay energized pulse duration (ms)

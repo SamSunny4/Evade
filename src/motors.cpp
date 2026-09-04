@@ -8,14 +8,18 @@ MotorsManager::MotorsManager()
       currentRightSpeed(0),
       currentCmd(CMD_STOP),
       eStopActive(true),
-      relay1State(false),
-      relay2State(false),
+      stallEstopActive(false),
+      stallEstopEndTime(0),
+      throttleOnStartTime(0),
+      lastMotionTime(0),
+      tapModeActive(false),
+      inTapPulse(false),
+      singleTapOnly(false),
+      tapCycleStartTime(0),
       tapOnMs(DEFAULT_TAP_ON_MS),
       tapOffMs(DEFAULT_TAP_OFF_MS),
-      tapCycleStartTime(0),
-      inTapPulse(false),
-      tapModeActive(false),
-      singleTapOnly(false) {}
+      relay1State(false),
+      relay2State(false) {}
 
 void MotorsManager::init() {
     pinMode(PIN_RELAY_1, OUTPUT);
@@ -28,6 +32,10 @@ void MotorsManager::init() {
     relay1State = false;
     relay2State = false;
     eStopActive = true;
+    stallEstopActive = false;
+    stallEstopEndTime = 0;
+    throttleOnStartTime = 0;
+    lastMotionTime = 0;
     setTapSpeed(DEFAULT_SPEED);
 
     stop();
@@ -35,7 +43,7 @@ void MotorsManager::init() {
 }
 
 void MotorsManager::applyRelays(bool r1, bool r2) {
-    if (eStopActive) {
+    if (eStopActive || stallEstopActive) {
         digitalWrite(PIN_RELAY_1, RELAY_OFF);
         digitalWrite(PIN_RELAY_2, RELAY_OFF);
         relay1State = false;
@@ -264,6 +272,62 @@ void MotorsManager::resetEmergencyStop() {
     Serial.println("[RelayMotors] Emergency stop reset. Relay controls restored.");
 }
 
+void MotorsManager::triggerStallEstop() {
+    stallEstopActive = true;
+    stallEstopEndTime = millis() + STALL_ESTOP_DURATION_MS;
+    stop();
+    Serial.println("\n>>> [SAFETY ALERT] Stall detected (throttle ON without acceleration)! 1-second Emergency Stop triggered. <<<");
+}
+
+bool MotorsManager::isStallEstopActive() const {
+    return stallEstopActive;
+}
+
+void MotorsManager::checkStallWatchdog(float dynamicAccel, float gyroRateZ) {
+    uint32_t now = millis();
+
+    // 1. Check active stall cooldown
+    if (stallEstopActive) {
+        if (now >= stallEstopEndTime) {
+            stallEstopActive = false;
+            Serial.println("[SAFETY] Stall 1-second cooldown complete. Motion resumed.");
+        } else {
+            // Still in stall cooldown: force relays OFF
+            if (relay1State || relay2State) {
+                applyRelays(false, false);
+            }
+            return;
+        }
+    }
+
+    // 2. Check if throttle is actively driving or pulsing
+    bool throttleOn = (currentCmd != CMD_STOP) && (tapModeActive || relay1State || relay2State);
+
+    if (!throttleOn) {
+        throttleOnStartTime = 0;
+        lastMotionTime = now;
+        return;
+    }
+
+    // Throttle is ON: start timing
+    if (throttleOnStartTime == 0) {
+        throttleOnStartTime = now;
+        lastMotionTime = now;
+    }
+
+    // 3. Motion detection: IMU dynamic linear acceleration (>0.06g) or gyro turn rate (>4.0 deg/s)
+    bool hasMotion = (dynamicAccel > 0.06f) || (fabs(gyroRateZ) > 4.0f);
+
+    if (hasMotion) {
+        lastMotionTime = now;
+    } else {
+        // No motion detected while throttle is ON for > 600ms
+        if ((now - throttleOnStartTime >= 600) && (now - lastMotionTime >= 600)) {
+            triggerStallEstop();
+        }
+    }
+}
+
 bool MotorsManager::isEmergencyStopped() const {
-    return eStopActive;
+    return eStopActive || stallEstopActive;
 }

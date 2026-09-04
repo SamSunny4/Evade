@@ -225,6 +225,12 @@ float ImuManager::getAccelZ() const {
     return accelZ;
 }
 
+float ImuManager::getDynamicAcceleration() const {
+    if (!connected) return 0.0f;
+    float mag = sqrt(accelX * accelX + accelY * accelY + accelZ * accelZ);
+    return fabs(mag - 1.0f);
+}
+
 float ImuManager::getPosX() const {
     return posX;
 }

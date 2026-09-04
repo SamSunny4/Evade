@@ -26,6 +26,7 @@ public:
     float getAccelX() const;
     float getAccelY() const;
     float getAccelZ() const;
+    float getDynamicAcceleration() const; // Net dynamic acceleration magnitude |a - 1.0g|
 
     // Odometry Position (in cm)
     float getPosX() const;

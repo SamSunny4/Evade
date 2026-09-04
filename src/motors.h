@@ -34,6 +34,11 @@ public:
     void resetEmergencyStop();
     bool isEmergencyStopped() const;
 
+    // Stall Watchdog (1-second E-Stop when throttle is on without acceleration)
+    void checkStallWatchdog(float dynamicAccel, float gyroRateZ);
+    void triggerStallEstop();
+    bool isStallEstopActive() const;
+
     // Dynamic max speed configuration
     void setBaseSpeed(uint8_t speed);
     uint8_t getBaseSpeed() const;
@@ -63,16 +68,23 @@ private:
     int16_t currentRightSpeed;
     MotorCommand currentCmd;
     bool eStopActive;
-    bool relay1State;
-    bool relay2State;
 
-    // Tap engine state
+    // Stall safety tracking
+    bool stallEstopActive;
+    uint32_t stallEstopEndTime;
+    uint32_t throttleOnStartTime;
+    uint32_t lastMotionTime;
+
+    // Tap pulse engine variables
+    bool tapModeActive;
+    bool inTapPulse;
+    bool singleTapOnly;
+    uint32_t tapCycleStartTime;
     uint16_t tapOnMs;
     uint16_t tapOffMs;
-    uint32_t tapCycleStartTime;
-    bool inTapPulse;
-    bool tapModeActive;
-    bool singleTapOnly;
+
+    bool relay1State;
+    bool relay2State;
 };
 
 extern MotorsManager motors;

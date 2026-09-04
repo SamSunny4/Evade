@@ -2,11 +2,18 @@
 #include <Arduino.h>
 #include "config.h"
 
-// Sector Angles for the 4 Ultrasonic Sensors (90° Spacing)
+// Sector Angles for the Ultrasonic Sensors:
+// Set 1 (Cardinal):
 // Index 0: 0°   (Front)
 // Index 1: 90°  (Right)
 // Index 2: 180° (Back)
 // Index 3: 270° (Left / -90°)
+//
+// Set 2 (Intercardinal / Diagonal - Toggleable):
+// Index 4: 45°  (Front-Right)
+// Index 5: 135° (Back-Right)
+// Index 6: 225° (Back-Left / -135°)
+// Index 7: 315° (Front-Left / -45°)
 
 class SensorsManager {
 public:
@@ -17,6 +24,10 @@ public:
     float getDistance(uint8_t index) const;
     float getRawDistance(uint8_t index) const;
     const float* getAllDistances() const;
+
+    // Toggleable 2nd Set (Diagonal)
+    void setDiagonalSetEnabled(bool enabled);
+    bool isDiagonalSetEnabled() const;
 
     // Obstacle Sector Checks
     bool isFrontBlocked(float threshold) const;
@@ -47,6 +58,7 @@ private:
     float smoothedDistances[NUM_ULTRASONIC_SENSORS];
     uint32_t lastTriggerTime;
     bool triggerPending;
+    bool diagonalSetEnabled;
 };
 
 extern SensorsManager sensors;

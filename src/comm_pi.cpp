@@ -46,15 +46,19 @@ void CommPiManager::sendTelemetry(ObstacleStatus status, float currentYaw, Robot
     // Format primary status line for fast parsing on Pi
     Serial2.printf("STATUS:%s\n", statusStr);
 
-    // Format rich JSON telemetry string (4 sensors: F, R, B, L)
-    Serial2.printf("{\"status\":\"%s\",\"mode\":\"%s\",\"yaw\":%.1f,\"spd\":[%d,%d],\"d\":[%.1f,%.1f,%.1f,%.1f]}\n",
-        statusStr,
-        modeStr,
-        currentYaw,
-        lSpd, rSpd,
-        sensors.getDistance(0), sensors.getDistance(1),
-        sensors.getDistance(2), sensors.getDistance(3)
-    );
+    // Format rich JSON telemetry string (4 or 8 sensors)
+    if (sensors.isDiagonalSetEnabled()) {
+        Serial2.printf("{\"status\":\"%s\",\"mode\":\"%s\",\"yaw\":%.1f,\"spd\":[%d,%d],\"d\":[%.1f,%.1f,%.1f,%.1f,%.1f,%.1f,%.1f,%.1f]}\n",
+            statusStr, modeStr, currentYaw, lSpd, rSpd,
+            sensors.getDistance(0), sensors.getDistance(1), sensors.getDistance(2), sensors.getDistance(3),
+            sensors.getDistance(4), sensors.getDistance(5), sensors.getDistance(6), sensors.getDistance(7)
+        );
+    } else {
+        Serial2.printf("{\"status\":\"%s\",\"mode\":\"%s\",\"yaw\":%.1f,\"spd\":[%d,%d],\"d\":[%.1f,%.1f,%.1f,%.1f]}\n",
+            statusStr, modeStr, currentYaw, lSpd, rSpd,
+            sensors.getDistance(0), sensors.getDistance(1), sensors.getDistance(2), sensors.getDistance(3)
+        );
+    }
 }
 
 void CommPiManager::processCommand(const String &cmd) {
