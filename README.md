@@ -2,7 +2,7 @@
 
 # EVade - ESP32 Autonomous 360° Evasion Robot & Web Portal
 
-A high-performance autonomous robot controller firmware for the **ESP32 DevKit V1** with **360° ultrasonic obstacle detection**, an **MPU6050 6-DOF IMU orientation & dead-reckoning system**, a **2-channel relay module (discrete pulse-tap tank steering)**, **Hardware Panic Siren on GPIO 4 (D4)**, **WiFi Disconnect Emergency Stop Safety**, and an embedded **Cybernetic Web Admin Portal** with wireless **ArduinoOTA** programming.
+A high-performance autonomous robot controller firmware for the **ESP32 DevKit V1** with **360° ultrasonic obstacle detection**, an **MPU6050 6-DOF IMU orientation & dead-reckoning system**, a **2-channel relay module (discrete pulse-tap tank steering)**, **Self-Defense Taser Module on GPIO 4 (D4)**, **WiFi Disconnect Emergency Stop Safety**, and an embedded **Cybernetic Web Admin Portal** with wireless **ArduinoOTA** programming.
 
 ---
 
@@ -88,11 +88,11 @@ The sensors are pulsed via three synchronized trigger pins (**GPIO 27**, **GPIO 
 | **SDA** | **GPIO 21** | I2C Data (400 kHz Fast Mode) |
 | **SCL** | **GPIO 22** | I2C Clock |
 
-### 4. Hardware Alarm / Buzzer (GPIO 4 / D4)
+### 4. Hardware Self-Defense Taser Circuit (GPIO 4 / D4)
 | Component Pin | ESP32 Pin | Signal / Function |
 | :--- | :--- | :--- |
-| **Buzzer (+) / LED (+)** | **GPIO 4 (D4)** | Output (HIGH = Alarm ON when bot has no moves available) |
-| **Buzzer (-) / LED (-)** | **GND** | Common Ground |
+| **Taser Trigger / Relay IN** | **GPIO 4 (D4)** | Output (HIGH = Taser active when bot has no moves available) |
+| **Taser Ground (-)** | **GND** | Common Ground |
 
 ---
 
@@ -107,20 +107,20 @@ The sensors are pulsed via three synchronized trigger pins (**GPIO 27**, **GPIO 
   - High-rate MPU6050 yaw drift-compensated integration.
   - Evasion state machine & discrete pulse-tapping engine.
   - 2-Channel Relay digital motor switching.
-  - Hardware Alarm Watchdog.
+  - Hardware Taser Defense Watchdog.
 
-### 2. Autonomous Evasion & Alarm Logic
+### 2. Autonomous Evasion & Taser Defense Logic
 - **Adjustable Threshold Distance**: Default 25 cm (slider tunable up to 100 cm).
 - **Front Blocked**: Discrete inching / tap-rotation toward the more open flank.
 - **Flank Obstacle**: Rotates away from the threat direction.
 - **Trapped (`STATUS_ALL_SIDES_TRAPPED`)**: When no viable moves remain (front and both rotation flanks blocked, or bot boxed in):
   - All motor relays immediately cut power.
-  - **Hardware Alarm Energized**: `GPIO 4` (D4) drives HIGH to sound an alarm buzzer or strobe an alert LED.
-- **Web Admin UI Alarm Control**:
-  - Live warning banner: `🚨 NO MOVES AVAILABLE — BOT TRAPPED (HARDWARE ALARM ON PIN D4) • TAP TO MUTE`.
-  - Interactive Alarm Button: `🔔 SOUND ALARM (D4 TEST)` / `🔕 SILENCE HARDWARE ALARM` for manual buzzer test and silencing.
+  - **Hardware Taser Discharged**: `GPIO 4` (D4) drives HIGH to trigger the electric taser / stun module.
+- **Web Admin UI Taser Control**:
+  - Live warning banner: `⚡ NO MOVES AVAILABLE — BOT TRAPPED (TASER ARMED ON PIN D4) • TAP TO DISARM`.
+  - Interactive Taser Button: `⚡ TEST TASER (D4)` / `⚡ DISARM TASER` for manual test discharge and safety cutoff.
   - REST API Control: `POST /api/alarm` accepts `{"state": "on"|"off"|"toggle"}` or bodyless toggle.
-- Once any obstacle moves away and a path opens, the alarm automatically turns OFF (`GPIO 4` goes LOW) and normal evasion resumes.
+- Once any obstacle moves away and a path opens, the taser automatically turns OFF (`GPIO 4` goes LOW) and normal evasion resumes.
 
 ---
 
