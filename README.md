@@ -33,7 +33,7 @@ A high-performance autonomous robot controller firmware for the **ESP32 DevKit V
 ```
 
 > [!TIP]
-> 📖 **Looking for full schematics, terminal connections, and power distribution?**
+> **Looking for full schematics, terminal connections, and power distribution?**
 > Check out the complete [Hardware Wiring & Circuit Guide](WIRING_DIAGRAM.md).
 
 ---
@@ -117,8 +117,8 @@ The sensors are pulsed via three synchronized trigger pins (**GPIO 27**, **GPIO 
   - All motor relays immediately cut power.
   - **Hardware Taser Discharged**: `GPIO 4` (D4) drives HIGH to trigger the electric taser / stun module.
 - **Web Admin UI Taser Control**:
-  - Live warning banner: `⚡ NO MOVES AVAILABLE — BOT TRAPPED (TASER ARMED ON PIN D4) • TAP TO DISARM`.
-  - Interactive Taser Button: `⚡ TEST TASER (D4)` / `⚡ DISARM TASER` for manual test discharge and safety cutoff.
+  - Live warning banner: `NO MOVES AVAILABLE — BOT TRAPPED (TASER ARMED ON PIN D4) • TAP TO DISARM`.
+  - Interactive Taser Button: `TEST TASER (D4)` / `DISARM TASER` for manual test discharge and safety cutoff.
   - REST API Control: `POST /api/alarm` accepts `{"state": "on"|"off"|"toggle"}` or bodyless toggle.
 - Once any obstacle moves away and a path opens, the taser automatically turns OFF (`GPIO 4` goes LOW) and normal evasion resumes.
 
@@ -175,7 +175,7 @@ To test, monitor, and visualize the robot's real-time actions and ultrasonic rad
 4. The dashboard displays:
    - **8-Direction Sonar Radar**: Real-time visual sonar beams with green/yellow/red proximity detection and distance tags.
    - **Robot Heading & Gyro Compass**: Robot chassis rotates in real time with the MPU6050 yaw.
-   - **Real-Time Action Taken Banner**: Instant classification of the bot's maneuvers (e.g. `▲ MOVING FORWARD`, `▼ REVERSING AWAY FROM FRONT OBSTACLE`, `◀ SPINNING LEFT`, `🛑 EMERGENCY STOPPED`, `⚠️ TRAPPED`).
+   - **Real-Time Action Taken Banner**: Instant classification of the bot's maneuvers (e.g. `MOVING FORWARD`, `REVERSING AWAY FROM FRONT OBSTACLE`, `SPINNING LEFT`, `[E-STOP] EMERGENCY STOPPED`, `[ALERT] TRAPPED`).
    - **Motor PWM Gauges**: Dual progress bars showing Left and Right track speeds (-255 to +255).
    - **Action & Status Event Log**: Timestamped record of every obstacle trigger and state change.
    - **Raw USB Console**: Real-time stream of raw lines emitted by the ESP32.
