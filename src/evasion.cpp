@@ -16,7 +16,9 @@ EvasionManager::EvasionManager()
       targetYaw(0.0f),
       phaseStartTime(0),
       consecutiveTaps(0),
-      alarmActive(false) {}
+      autoAlarmActive(false),
+      manualAlarmOverride(false),
+      alarmSilenced(false) {}
 
 void EvasionManager::init() {
     thresholdDistance = DEFAULT_THRESHOLD_CM;
@@ -28,7 +30,9 @@ void EvasionManager::init() {
     targetYaw = 0.0f;
     phaseStartTime = millis();
     consecutiveTaps = 0;
-    alarmActive = false;
+    autoAlarmActive = false;
+    manualAlarmOverride = false;
+    alarmSilenced = false;
 
     pinMode(PIN_ALARM, OUTPUT);
     digitalWrite(PIN_ALARM, LOW);
@@ -58,8 +62,40 @@ uint8_t EvasionManager::getTapCount() const {
     return consecutiveTaps;
 }
 
+void EvasionManager::updateAlarmOutput() {
+    bool active = manualAlarmOverride || (autoAlarmActive && !alarmSilenced);
+    digitalWrite(PIN_ALARM, active ? HIGH : LOW);
+}
+
 bool EvasionManager::isAlarmActive() const {
-    return alarmActive;
+    return manualAlarmOverride || (autoAlarmActive && !alarmSilenced);
+}
+
+bool EvasionManager::isManualAlarm() const {
+    return manualAlarmOverride;
+}
+
+void EvasionManager::setManualAlarm(bool enable) {
+    manualAlarmOverride = enable;
+    if (enable) alarmSilenced = false;
+    updateAlarmOutput();
+}
+
+void EvasionManager::toggleManualAlarm() {
+    if (isAlarmActive()) {
+        manualAlarmOverride = false;
+        alarmSilenced = true;
+    } else {
+        manualAlarmOverride = true;
+        alarmSilenced = false;
+    }
+    updateAlarmOutput();
+}
+
+void EvasionManager::silenceAlarm() {
+    manualAlarmOverride = false;
+    alarmSilenced = true;
+    updateAlarmOutput();
 }
 
 void EvasionManager::update() {
@@ -76,12 +112,13 @@ void EvasionManager::executeEvadeStateMachine() {
 
             if (currentStatus == STATUS_ALL_SIDES_TRAPPED || sensors.isTrapped(thresholdDistance)) {
                 currentState = STATE_TRAPPED;
-                alarmActive = true;
-                digitalWrite(PIN_ALARM, HIGH);
+                autoAlarmActive = true;
+                updateAlarmOutput();
                 phaseStartTime = millis();
             } else {
-                alarmActive = false;
-                digitalWrite(PIN_ALARM, LOW);
+                autoAlarmActive = false;
+                alarmSilenced = false;
+                updateAlarmOutput();
 
                 if (currentStatus == STATUS_OBJECT_IN_REAR) {
                     // Rear threat detected: tap forward away from rear obstacle if front is clear
@@ -172,8 +209,8 @@ void EvasionManager::executeEvadeStateMachine() {
                         // No more moves available: bot trapped, fire alarm
                         motors.stop();
                         currentState = STATE_TRAPPED;
-                        alarmActive = true;
-                        digitalWrite(PIN_ALARM, HIGH);
+                        autoAlarmActive = true;
+                        updateAlarmOutput();
                         consecutiveTaps = 0;
                     } else if (consecutiveTaps >= 10) {
                         // Safety guard: max 10 taps reached, return to idle evaluation
@@ -219,8 +256,8 @@ void EvasionManager::executeEvadeStateMachine() {
                         // Trapped while attempting forward move
                         motors.stop();
                         currentState = STATE_TRAPPED;
-                        alarmActive = true;
-                        digitalWrite(PIN_ALARM, HIGH);
+                        autoAlarmActive = true;
+                        updateAlarmOutput();
                         consecutiveTaps = 0;
                     } else if (consecutiveTaps >= 8) {
                         // Safety guard: max 8 forward taps reached
@@ -244,11 +281,12 @@ void EvasionManager::executeEvadeStateMachine() {
             motors.stop();
             if (!sensors.isTrapped(thresholdDistance)) {
                 currentState = STATE_CLEAR_IDLE;
-                alarmActive = false;
-                digitalWrite(PIN_ALARM, LOW);
+                autoAlarmActive = false;
+                alarmSilenced = false;
+                updateAlarmOutput();
             } else {
-                alarmActive = true;
-                digitalWrite(PIN_ALARM, HIGH);
+                autoAlarmActive = true;
+                updateAlarmOutput();
             }
             break;
         }

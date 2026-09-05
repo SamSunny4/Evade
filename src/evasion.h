@@ -33,9 +33,14 @@ public:
     float getTargetYaw() const;
     uint8_t getTapCount() const;
     bool isAlarmActive() const;
+    bool isManualAlarm() const;
+    void setManualAlarm(bool enable);
+    void toggleManualAlarm();
+    void silenceAlarm();
 
 private:
     void executeEvadeStateMachine();
+    void updateAlarmOutput();
 
     float thresholdDistance;
     EvadeState currentState;
@@ -47,7 +52,9 @@ private:
     float targetYaw;
     uint32_t phaseStartTime;
     uint8_t consecutiveTaps;
-    bool alarmActive;
+    bool autoAlarmActive;
+    bool manualAlarmOverride;
+    bool alarmSilenced;
 };
 
 extern EvasionManager evasion;

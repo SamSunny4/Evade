@@ -26,6 +26,7 @@ private:
     void handleApiConfig();
     void handleApiImuReset();
     void handleApiSensorsMode();
+    void handleApiAlarm();
 
     WebServer server;
     RobotControlMode activeMode;

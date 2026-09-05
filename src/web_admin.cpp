@@ -314,6 +314,44 @@ static const char INDEX_HTML[] PROGMEM = R"rawliteral(
       box-shadow: 0 0 15px var(--red-glow);
     }
 
+    /* HARDWARE ALARM TOGGLE BUTTON */
+    .alarm-box {
+      margin-top: 8px;
+    }
+
+    .btn-alarm {
+      width: 100%;
+      padding: 11px 16px;
+      border-radius: 12px;
+      font-size: 13px;
+      font-weight: 800;
+      letter-spacing: 0.5px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      transition: all 0.2s ease;
+      background: rgba(245, 158, 11, 0.12);
+      border: 1px solid rgba(245, 158, 11, 0.4);
+      color: #FCD34D;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+    }
+    .btn-alarm:hover {
+      background: rgba(245, 158, 11, 0.22);
+      border-color: #F59E0B;
+    }
+    .btn-alarm:active {
+      transform: scale(0.98);
+    }
+    .btn-alarm.active {
+      background: rgba(239, 68, 68, 0.3);
+      border: 2px solid var(--red-neon);
+      color: #FFF;
+      box-shadow: 0 0 20px var(--red-glow);
+      animation: pulseAlert 0.6s infinite alternate;
+    }
+
     /* ULTRASONIC 8-DIRECTIONAL COMPASS GRID */
     .sensor-compass-grid {
       display: grid;
@@ -557,8 +595,16 @@ static const char INDEX_HTML[] PROGMEM = R"rawliteral(
       </button>
     </div>
     <div style="text-align: center; font-size: 11px; color: var(--text-secondary); margin-top: 6px;">⌨️ Tap <b>[SPACE]</b> for quick E-Stop / Resume</div>
+
+    <!-- HARDWARE ALARM CONTROL -->
+    <div class="alarm-box">
+      <button class="btn-alarm" id="alarmToggleBtn" onclick="toggleAlarm()">
+        <span id="alarmIcon">🔔</span> <span id="alarmBtnText">SOUND ALARM (D4 TEST)</span>
+      </button>
+    </div>
+
     <div class="stall-alert-banner" id="stallAlert">⚠️ STALL DETECTED: THROTTLE ACTIVE WITH NO ACCELERATION (1S E-STOP)</div>
-    <div class="alarm-alert-banner" id="alarmAlert">🚨 NO MOVES AVAILABLE — BOT TRAPPED (HARDWARE ALARM ACTIVE ON PIN D4)</div>
+    <div class="alarm-alert-banner" id="alarmAlert" onclick="toggleAlarm()" style="cursor: pointer;" title="Click to silence alarm">🚨 NO MOVES AVAILABLE — BOT TRAPPED (HARDWARE ALARM ACTIVE ON PIN D4) • <u>TAP TO MUTE</u></div>
 
     <!-- ULTRASONIC SENSOR RADAR CARD -->
     <div class="card" id="radarCard">
@@ -763,10 +809,26 @@ static const char INDEX_HTML[] PROGMEM = R"rawliteral(
           stallBanner.style.display = data.stall_estop ? 'block' : 'none';
         }
 
-        // Trapped / No-Moves Hardware Alarm banner
+        // Trapped / No-Moves Hardware Alarm banner & Toggle Button
         const alarmBanner = document.getElementById('alarmAlert');
+        const alarmBtn = document.getElementById('alarmToggleBtn');
+        const alarmIcon = document.getElementById('alarmIcon');
+        const alarmBtnText = document.getElementById('alarmBtnText');
+        const isAlarm = data.alarm || false;
+        const isManual = data.manual_alarm || false;
+
         if (alarmBanner) {
-          alarmBanner.style.display = data.alarm ? 'block' : 'none';
+          alarmBanner.style.display = isAlarm ? 'block' : 'none';
+        }
+        if (alarmBtn) {
+          alarmBtn.classList.toggle('active', isAlarm);
+          if (isAlarm) {
+            if (alarmIcon) alarmIcon.innerText = '🔕';
+            if (alarmBtnText) alarmBtnText.innerText = isManual ? 'STOP MANUAL ALARM (D4 ACTIVE)' : 'SILENCE HARDWARE ALARM (TRAPPED)';
+          } else {
+            if (alarmIcon) alarmIcon.innerText = '🔔';
+            if (alarmBtnText) alarmBtnText.innerText = 'SOUND ALARM (D4 TEST)';
+          }
         }
 
         // Stall accel threshold display sync
@@ -926,6 +988,14 @@ static const char INDEX_HTML[] PROGMEM = R"rawliteral(
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ estop: false })
+      }).then(fetchStatus);
+    }
+
+    function toggleAlarm() {
+      fetch('/api/alarm', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ toggle: true })
       }).then(fetchStatus);
     }
 
@@ -1245,6 +1315,7 @@ void WebAdminManager::setupRoutes() {
     server.on("/api/config", HTTP_POST, [this]() { handleApiConfig(); });
     server.on("/api/imu/reset", HTTP_POST, [this]() { handleApiImuReset(); });
     server.on("/api/sensors/mode", HTTP_POST, [this]() { handleApiSensorsMode(); });
+    server.on("/api/alarm", HTTP_POST, [this]() { handleApiAlarm(); });
 
     server.onNotFound([]() {
         webAdmin.server.send(404, "text/plain", "Not Found");
@@ -1267,6 +1338,7 @@ void WebAdminManager::handleApiStatus() {
     doc["stall_estop"] = motors.isStallEstopActive();
     doc["stall_threshold"] = round(motors.getStallAccelThreshold() * 100.0f) / 100.0f;
     doc["alarm"] = evasion.isAlarmActive();
+    doc["manual_alarm"] = evasion.isManualAlarm();
     doc["diagonal_enabled"] = sensors.isDiagonalSetEnabled();
     doc["threshold"] = evasion.getThreshold();
     doc["speed"] = motors.getBaseSpeed();
@@ -1475,6 +1547,56 @@ void WebAdminManager::handleApiSensorsMode() {
     }
 
     server.send(200, "application/json", "{\"status\":\"ok\"}");
+}
+
+void WebAdminManager::handleApiAlarm() {
+    if (server.hasArg("plain")) {
+#if ARDUINOJSON_VERSION_MAJOR >= 7
+        JsonDocument doc;
+#else
+        StaticJsonDocument<128> doc;
+#endif
+        DeserializationError error = deserializeJson(doc, server.arg("plain"));
+        if (!error) {
+            if (doc.containsKey("state")) {
+                String state = doc["state"].as<String>();
+                if (state == "on") {
+                    evasion.setManualAlarm(true);
+                } else if (state == "off") {
+                    evasion.setManualAlarm(false);
+                    evasion.silenceAlarm();
+                } else {
+                    evasion.toggleManualAlarm();
+                }
+            } else if (doc.containsKey("enable")) {
+                bool en = doc["enable"].as<bool>();
+                if (en) {
+                    evasion.setManualAlarm(true);
+                } else {
+                    evasion.setManualAlarm(false);
+                    evasion.silenceAlarm();
+                }
+            } else {
+                evasion.toggleManualAlarm();
+            }
+        } else {
+            evasion.toggleManualAlarm();
+        }
+    } else {
+        evasion.toggleManualAlarm();
+    }
+
+#if ARDUINOJSON_VERSION_MAJOR >= 7
+    JsonDocument resp;
+#else
+    StaticJsonDocument<128> resp;
+#endif
+    resp["status"] = "ok";
+    resp["alarm"] = evasion.isAlarmActive();
+    resp["manual_alarm"] = evasion.isManualAlarm();
+    String out;
+    serializeJson(resp, out);
+    server.send(200, "application/json", out);
 }
 
 void WebAdminManager::update() {

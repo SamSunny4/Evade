@@ -114,8 +114,11 @@ The sensors are pulsed via three synchronized trigger pins (**GPIO 27**, **GPIO 
 - **Trapped (`STATUS_ALL_SIDES_TRAPPED`)**: When no viable moves remain (front and both rotation flanks blocked, or bot boxed in):
   - All motor relays immediately cut power.
   - **Hardware Alarm Energized**: `GPIO 4` (D4) drives HIGH to sound an alarm buzzer or strobe an alert LED.
-  - Web Admin UI renders a prominent warning banner: `🚨 NO MOVES AVAILABLE — BOT TRAPPED`.
-  - Once any obstacle moves away and a path opens, the alarm automatically turns OFF (`GPIO 4` goes LOW) and normal evasion resumes.
+- **Web Admin UI Alarm Control**:
+  - Live warning banner: `🚨 NO MOVES AVAILABLE — BOT TRAPPED (HARDWARE ALARM ON PIN D4) • TAP TO MUTE`.
+  - Interactive Alarm Button: `🔔 SOUND ALARM (D4 TEST)` / `🔕 SILENCE HARDWARE ALARM` for manual buzzer test and silencing.
+  - REST API Control: `POST /api/alarm` accepts `{"state": "on"|"off"|"toggle"}` or bodyless toggle.
+- Once any obstacle moves away and a path opens, the alarm automatically turns OFF (`GPIO 4` goes LOW) and normal evasion resumes.
 
 ---
 
