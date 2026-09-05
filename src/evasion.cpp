@@ -15,7 +15,8 @@ EvasionManager::EvasionManager()
       currentTapPhase(TAP_PHASE_PULSE),
       targetYaw(0.0f),
       phaseStartTime(0),
-      consecutiveTaps(0) {}
+      consecutiveTaps(0),
+      alarmActive(false) {}
 
 void EvasionManager::init() {
     thresholdDistance = DEFAULT_THRESHOLD_CM;
@@ -27,6 +28,10 @@ void EvasionManager::init() {
     targetYaw = 0.0f;
     phaseStartTime = millis();
     consecutiveTaps = 0;
+    alarmActive = false;
+
+    pinMode(PIN_ALARM, OUTPUT);
+    digitalWrite(PIN_ALARM, LOW);
 }
 
 void EvasionManager::setThreshold(float cm) {
@@ -53,6 +58,10 @@ uint8_t EvasionManager::getTapCount() const {
     return consecutiveTaps;
 }
 
+bool EvasionManager::isAlarmActive() const {
+    return alarmActive;
+}
+
 void EvasionManager::update() {
     executeEvadeStateMachine();
 }
@@ -65,21 +74,55 @@ void EvasionManager::executeEvadeStateMachine() {
             motors.stop();
             consecutiveTaps = 0;
 
-            if (currentStatus == STATUS_ALL_SIDES_TRAPPED) {
+            if (currentStatus == STATUS_ALL_SIDES_TRAPPED || sensors.isTrapped(thresholdDistance)) {
                 currentState = STATE_TRAPPED;
+                alarmActive = true;
+                digitalWrite(PIN_ALARM, HIGH);
                 phaseStartTime = millis();
-            } else if (currentStatus == STATUS_OBJECT_IN_REAR) {
-                // Rear threat detected: tap forward away from rear obstacle if front is clear
-                if (!sensors.isFrontBlocked(thresholdDistance)) {
-                    currentState = STATE_TAP_FORWARD;
+            } else {
+                alarmActive = false;
+                digitalWrite(PIN_ALARM, LOW);
+
+                if (currentStatus == STATUS_OBJECT_IN_REAR) {
+                    // Rear threat detected: tap forward away from rear obstacle if front is clear
+                    if (!sensors.isFrontBlocked(thresholdDistance)) {
+                        currentState = STATE_TAP_FORWARD;
+                        currentTapPhase = TAP_PHASE_PULSE;
+                        activeTapCmd = CMD_FORWARD;
+                        threatOrigin = STATUS_OBJECT_IN_REAR;
+                        consecutiveTaps = 1;
+                        phaseStartTime = millis();
+                        motors.singleTap(CMD_FORWARD);
+                    } else {
+                        // Both front and rear tight -> tap rotate toward more open flank
+                        currentState = STATE_TAP_ROTATING;
+                        currentTapPhase = TAP_PHASE_PULSE;
+                        activeTapCmd = (sensors.getDistance(1) > sensors.getDistance(3)) ? CMD_ROTATE_RIGHT : CMD_ROTATE_LEFT;
+                        threatOrigin = STATUS_OBJECT_IN_FRONT;
+                        consecutiveTaps = 1;
+                        phaseStartTime = millis();
+                        motors.singleTap(activeTapCmd);
+                    }
+                } else if (currentStatus == STATUS_OBJECT_ON_LEFT) {
+                    // Left threat detected: tap turn RIGHT away from obstacle
+                    currentState = STATE_TAP_ROTATING;
                     currentTapPhase = TAP_PHASE_PULSE;
-                    activeTapCmd = CMD_FORWARD;
-                    threatOrigin = STATUS_OBJECT_IN_REAR;
+                    activeTapCmd = CMD_ROTATE_RIGHT;
+                    threatOrigin = STATUS_OBJECT_ON_LEFT;
                     consecutiveTaps = 1;
                     phaseStartTime = millis();
-                    motors.singleTap(CMD_FORWARD);
-                } else {
-                    // Both front and rear tight -> tap rotate toward more open flank
+                    motors.singleTap(CMD_ROTATE_RIGHT);
+                } else if (currentStatus == STATUS_OBJECT_ON_RIGHT) {
+                    // Right threat detected: tap turn LEFT away from obstacle
+                    currentState = STATE_TAP_ROTATING;
+                    currentTapPhase = TAP_PHASE_PULSE;
+                    activeTapCmd = CMD_ROTATE_LEFT;
+                    threatOrigin = STATUS_OBJECT_ON_RIGHT;
+                    consecutiveTaps = 1;
+                    phaseStartTime = millis();
+                    motors.singleTap(CMD_ROTATE_LEFT);
+                } else if (currentStatus == STATUS_OBJECT_IN_FRONT || currentStatus == STATUS_OBJECT_BOTH_SIDES) {
+                    // Front or both flanks threat: tap rotate away to more open flank
                     currentState = STATE_TAP_ROTATING;
                     currentTapPhase = TAP_PHASE_PULSE;
                     activeTapCmd = (sensors.getDistance(1) > sensors.getDistance(3)) ? CMD_ROTATE_RIGHT : CMD_ROTATE_LEFT;
@@ -87,37 +130,10 @@ void EvasionManager::executeEvadeStateMachine() {
                     consecutiveTaps = 1;
                     phaseStartTime = millis();
                     motors.singleTap(activeTapCmd);
+                } else {
+                    // Path clear: hold stationary position
+                    motors.stop();
                 }
-            } else if (currentStatus == STATUS_OBJECT_ON_LEFT) {
-                // Left threat detected: tap turn RIGHT away from obstacle
-                currentState = STATE_TAP_ROTATING;
-                currentTapPhase = TAP_PHASE_PULSE;
-                activeTapCmd = CMD_ROTATE_RIGHT;
-                threatOrigin = STATUS_OBJECT_ON_LEFT;
-                consecutiveTaps = 1;
-                phaseStartTime = millis();
-                motors.singleTap(CMD_ROTATE_RIGHT);
-            } else if (currentStatus == STATUS_OBJECT_ON_RIGHT) {
-                // Right threat detected: tap turn LEFT away from obstacle
-                currentState = STATE_TAP_ROTATING;
-                currentTapPhase = TAP_PHASE_PULSE;
-                activeTapCmd = CMD_ROTATE_LEFT;
-                threatOrigin = STATUS_OBJECT_ON_RIGHT;
-                consecutiveTaps = 1;
-                phaseStartTime = millis();
-                motors.singleTap(CMD_ROTATE_LEFT);
-            } else if (currentStatus == STATUS_OBJECT_IN_FRONT || currentStatus == STATUS_OBJECT_BOTH_SIDES) {
-                // Front or both flanks threat: tap rotate away to more open flank
-                currentState = STATE_TAP_ROTATING;
-                currentTapPhase = TAP_PHASE_PULSE;
-                activeTapCmd = (sensors.getDistance(1) > sensors.getDistance(3)) ? CMD_ROTATE_RIGHT : CMD_ROTATE_LEFT;
-                threatOrigin = STATUS_OBJECT_IN_FRONT;
-                consecutiveTaps = 1;
-                phaseStartTime = millis();
-                motors.singleTap(activeTapCmd);
-            } else {
-                // Path clear: hold stationary position
-                motors.stop();
             }
             break;
         }
@@ -151,6 +167,13 @@ void EvasionManager::executeEvadeStateMachine() {
                         // Obstacle cleared the threshold: evasion complete!
                         motors.stop();
                         currentState = STATE_CLEAR_IDLE;
+                        consecutiveTaps = 0;
+                    } else if (sensors.isTrapped(thresholdDistance)) {
+                        // No more moves available: bot trapped, fire alarm
+                        motors.stop();
+                        currentState = STATE_TRAPPED;
+                        alarmActive = true;
+                        digitalWrite(PIN_ALARM, HIGH);
                         consecutiveTaps = 0;
                     } else if (consecutiveTaps >= 10) {
                         // Safety guard: max 10 taps reached, return to idle evaluation
@@ -192,6 +215,13 @@ void EvasionManager::executeEvadeStateMachine() {
                         motors.stop();
                         currentState = STATE_CLEAR_IDLE;
                         consecutiveTaps = 0;
+                    } else if (sensors.isTrapped(thresholdDistance)) {
+                        // Trapped while attempting forward move
+                        motors.stop();
+                        currentState = STATE_TRAPPED;
+                        alarmActive = true;
+                        digitalWrite(PIN_ALARM, HIGH);
+                        consecutiveTaps = 0;
                     } else if (consecutiveTaps >= 8) {
                         // Safety guard: max 8 forward taps reached
                         motors.stop();
@@ -214,6 +244,11 @@ void EvasionManager::executeEvadeStateMachine() {
             motors.stop();
             if (!sensors.isTrapped(thresholdDistance)) {
                 currentState = STATE_CLEAR_IDLE;
+                alarmActive = false;
+                digitalWrite(PIN_ALARM, LOW);
+            } else {
+                alarmActive = true;
+                digitalWrite(PIN_ALARM, HIGH);
             }
             break;
         }

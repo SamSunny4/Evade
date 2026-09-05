@@ -3,7 +3,6 @@
 #include "imu.h"
 #include "motors.h"
 #include "evasion.h"
-#include "comm_pi.h"
 #include <ArduinoJson.h>
 
 WebAdminManager webAdmin;
@@ -298,6 +297,23 @@ static const char INDEX_HTML[] PROGMEM = R"rawliteral(
       letter-spacing: 0.5px;
     }
 
+    /* TRAPPED NO-MOVES ALARM BANNER */
+    .alarm-alert-banner {
+      background: rgba(239, 68, 68, 0.25);
+      border: 2px solid var(--red-neon);
+      color: #FFF;
+      padding: 10px 14px;
+      border-radius: 10px;
+      font-size: 12px;
+      font-weight: 800;
+      text-align: center;
+      margin-top: 8px;
+      display: none;
+      animation: pulseAlert 0.5s infinite alternate;
+      letter-spacing: 0.5px;
+      box-shadow: 0 0 15px var(--red-glow);
+    }
+
     /* ULTRASONIC 8-DIRECTIONAL COMPASS GRID */
     .sensor-compass-grid {
       display: grid;
@@ -542,33 +558,34 @@ static const char INDEX_HTML[] PROGMEM = R"rawliteral(
     </div>
     <div style="text-align: center; font-size: 11px; color: var(--text-secondary); margin-top: 6px;">⌨️ Tap <b>[SPACE]</b> for quick E-Stop / Resume</div>
     <div class="stall-alert-banner" id="stallAlert">⚠️ STALL DETECTED: THROTTLE ACTIVE WITH NO ACCELERATION (1S E-STOP)</div>
+    <div class="alarm-alert-banner" id="alarmAlert">🚨 NO MOVES AVAILABLE — BOT TRAPPED (HARDWARE ALARM ACTIVE ON PIN D4)</div>
 
     <!-- ULTRASONIC SENSOR RADAR CARD -->
     <div class="card" id="radarCard">
       <div class="card-title" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
-        <span>Ultrasonic Radar</span>
+        <span>Ultrasonic Radar (6 Directions)</span>
         <div style="display: flex; gap: 8px; align-items: center;">
-          <button class="btn-diag-toggle" id="btnDiagToggle" onclick="toggleDiagonalSensors()">⚡ 8-SENSOR: OFF</button>
+          <button class="btn-diag-toggle" id="btnDiagToggle" onclick="toggleDiagonalSensors()">⚡ REAR DIAG: OFF</button>
           <span id="obstacleAlert" style="color: var(--emerald-neon); font-size: 11px; font-weight: 700; letter-spacing: 0.5px;">PATH CLEAR</span>
         </div>
       </div>
 
       <div class="sensor-compass-grid">
-        <!-- ROW 1: FL (315°), FRONT (0°), FR (45°) -->
-        <div class="sensor-node sensor-corner" id="nodeFL">
-          <span class="sensor-dir">◤ FL 315°</span>
-          <span class="sensor-val" id="valFL">---</span>
-          <div class="sensor-meter"><div class="meter-bar" id="barFL"></div></div>
+        <!-- ROW 1: FL (DISABLED), FRONT (0°), FR (DISABLED) -->
+        <div class="sensor-node sensor-corner" id="nodeFL" style="opacity: 0.25; border-style: dotted;">
+          <span class="sensor-dir">◤ FL</span>
+          <span class="sensor-val" style="color: #64748B; font-size: 10px;">DISABLED</span>
+          <div class="sensor-meter"><div class="meter-bar" style="width: 0%;"></div></div>
         </div>
         <div class="sensor-node" id="nodeFront">
           <span class="sensor-dir">▲ FRONT 0°</span>
           <span class="sensor-val" id="valFront">---</span>
           <div class="sensor-meter"><div class="meter-bar" id="barFront"></div></div>
         </div>
-        <div class="sensor-node sensor-corner" id="nodeFR">
-          <span class="sensor-dir">FR 45° ◥</span>
-          <span class="sensor-val" id="valFR">---</span>
-          <div class="sensor-meter"><div class="meter-bar" id="barFR"></div></div>
+        <div class="sensor-node sensor-corner" id="nodeFR" style="opacity: 0.25; border-style: dotted;">
+          <span class="sensor-dir">FR ◥</span>
+          <span class="sensor-val" style="color: #64748B; font-size: 10px;">DISABLED</span>
+          <div class="sensor-meter"><div class="meter-bar" style="width: 0%;"></div></div>
         </div>
 
         <!-- ROW 2: LEFT (270°), CENTER ROBOT, RIGHT (90°) -->
@@ -588,9 +605,9 @@ static const char INDEX_HTML[] PROGMEM = R"rawliteral(
           <div class="sensor-meter"><div class="meter-bar" id="barRight"></div></div>
         </div>
 
-        <!-- ROW 3: BL (225°), BACK (180°), BR (135°) -->
+        <!-- ROW 3: RL (225° - GPIO 26), BACK (180°), RR (135° - GPIO 39) -->
         <div class="sensor-node sensor-corner" id="nodeBL">
-          <span class="sensor-dir">◣ BL 225°</span>
+          <span class="sensor-dir">◣ RL 225°</span>
           <span class="sensor-val" id="valBL">---</span>
           <div class="sensor-meter"><div class="meter-bar" id="barBL"></div></div>
         </div>
@@ -600,7 +617,7 @@ static const char INDEX_HTML[] PROGMEM = R"rawliteral(
           <div class="sensor-meter"><div class="meter-bar" id="barBack"></div></div>
         </div>
         <div class="sensor-node sensor-corner" id="nodeBR">
-          <span class="sensor-dir">BR 135° ◢</span>
+          <span class="sensor-dir">RR 135° ◢</span>
           <span class="sensor-val" id="valBR">---</span>
           <div class="sensor-meter"><div class="meter-bar" id="barBR"></div></div>
         </div>
@@ -655,10 +672,9 @@ static const char INDEX_HTML[] PROGMEM = R"rawliteral(
     <!-- MAIN CONTROLS CARD -->
     <div class="card disabled-overlay" id="controlsCard">
       <div class="card-title">Control Mode</div>
-      <div class="mode-grid">
+      <div class="mode-grid" style="grid-template-columns: 1fr 1fr;">
         <button class="btn-mode" id="btnModeAuto" onclick="setMode('AUTO_EVADE')">AUTO EVADE</button>
         <button class="btn-mode active" id="btnModeWeb" onclick="setMode('WEB_OVERRIDE')">MANUAL</button>
-        <button class="btn-mode" id="btnModePi" onclick="setMode('PI_OVERRIDE')">PI LINK</button>
       </div>
 
       <!-- TANK DPAD -->
@@ -691,6 +707,14 @@ static const char INDEX_HTML[] PROGMEM = R"rawliteral(
           <span id="threshDisplay">25 cm</span>
         </div>
         <input type="range" id="threshRange" min="10" max="100" value="25" oninput="updateThresh(this.value)">
+      </div>
+
+      <div class="slider-group">
+        <div class="slider-label">
+          <span>Stall Accel Threshold</span>
+          <span id="stallThreshDisplay">0.06 g</span>
+        </div>
+        <input type="range" id="stallThreshRange" min="0.01" max="0.25" step="0.01" value="0.06" oninput="updateStallThresh(this.value)">
       </div>
     </div>
   </div>
@@ -728,7 +752,7 @@ static const char INDEX_HTML[] PROGMEM = R"rawliteral(
           resumeBtn.style.display = 'none';
           controlsCard.classList.remove('disabled-overlay');
           if (sysBadge) {
-            sysBadge.innerText = activeMode === 'AUTO_EVADE' ? 'AUTO EVADE' : (activeMode === 'PI_OVERRIDE' ? 'PI CONTROL' : 'MANUAL');
+            sysBadge.innerText = activeMode === 'AUTO_EVADE' ? 'AUTO EVADE' : 'MANUAL';
             sysBadge.classList.remove('estop-alert');
           }
         }
@@ -739,10 +763,25 @@ static const char INDEX_HTML[] PROGMEM = R"rawliteral(
           stallBanner.style.display = data.stall_estop ? 'block' : 'none';
         }
 
+        // Trapped / No-Moves Hardware Alarm banner
+        const alarmBanner = document.getElementById('alarmAlert');
+        if (alarmBanner) {
+          alarmBanner.style.display = data.alarm ? 'block' : 'none';
+        }
+
+        // Stall accel threshold display sync
+        if (data.stall_threshold !== undefined) {
+          const stDisp = document.getElementById('stallThreshDisplay');
+          const stRange = document.getElementById('stallThreshRange');
+          if (stDisp && document.activeElement !== stRange) {
+            stDisp.innerText = Number(data.stall_threshold).toFixed(2) + ' g';
+            if (stRange) stRange.value = data.stall_threshold;
+          }
+        }
+
         // Mode button styling
         document.getElementById('btnModeAuto').classList.toggle('active', activeMode === 'AUTO_EVADE');
         document.getElementById('btnModeWeb').classList.toggle('active', activeMode === 'WEB_OVERRIDE');
-        document.getElementById('btnModePi').classList.toggle('active', activeMode === 'PI_OVERRIDE');
 
         // Diagonal sensors toggle state
         if (data.diagonal_enabled !== undefined) {
@@ -750,11 +789,11 @@ static const char INDEX_HTML[] PROGMEM = R"rawliteral(
         }
         const btnDiag = document.getElementById('btnDiagToggle');
         if (btnDiag) {
-          btnDiag.innerText = diagonalEnabled ? '⚡ 8-SENSOR: ON' : '⚡ 8-SENSOR: OFF';
+          btnDiag.innerText = diagonalEnabled ? '⚡ REAR DIAG: ON' : '⚡ REAR DIAG: OFF';
           btnDiag.classList.toggle('active', diagonalEnabled);
         }
 
-        // Update 8-directional ultrasonic sensor readings
+        // Update 6-directional ultrasonic sensor readings
         if (data.d && data.d.length >= 4) {
           const thresh = data.threshold || 25;
           const sensorsList = [
@@ -764,12 +803,10 @@ static const char INDEX_HTML[] PROGMEM = R"rawliteral(
             { id: 'Left',  dist: data.d[3], isDiag: false }
           ];
 
-          if (data.d.length >= 8) {
+          if (data.d.length >= 6) {
             sensorsList.push(
-              { id: 'FR', dist: data.d[4], isDiag: true },
-              { id: 'BR', dist: data.d[5], isDiag: true },
-              { id: 'BL', dist: data.d[6], isDiag: true },
-              { id: 'FL', dist: data.d[7], isDiag: true }
+              { id: 'BR', dist: data.d[4], isDiag: true }, // RR 135°
+              { id: 'BL', dist: data.d[5], isDiag: true }  // RL 225° (GPIO 26)
             );
           }
 
@@ -923,6 +960,16 @@ static const char INDEX_HTML[] PROGMEM = R"rawliteral(
       });
     }
 
+    function updateStallThresh(val) {
+      const v = parseFloat(val);
+      document.getElementById('stallThreshDisplay').innerText = v.toFixed(2) + ' g';
+      fetch('/api/config', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ stall_threshold: v })
+      });
+    }
+
     function updateSpeed(val) {
       const v = parseInt(val);
       const onMs = Math.round(25 + ((v - 50) / 205) * (160 - 25));
@@ -980,12 +1027,10 @@ static const char INDEX_HTML[] PROGMEM = R"rawliteral(
           { deg: 180, dist: distances[2] }, // Back
           { deg: 270, dist: distances[3] }  // Left
         ];
-        if (diagonalEnabled && distances.length >= 8) {
+        if (diagonalEnabled && distances.length >= 6) {
           activeSensors.push(
-            { deg: 45, dist: distances[4] },  // FR
-            { deg: 135, dist: distances[5] }, // BR
-            { deg: 225, dist: distances[6] }, // BL
-            { deg: 315, dist: distances[7] }  // FL
+            { deg: 135, dist: distances[4] }, // RR
+            { deg: 225, dist: distances[5] }  // RL
           );
         }
 
@@ -1217,12 +1262,11 @@ void WebAdminManager::handleApiStatus() {
     StaticJsonDocument<512> doc;
 #endif
 
-    if (activeMode == MODE_PI_OVERRIDE) doc["mode"] = "PI_OVERRIDE";
-    else if (activeMode == MODE_WEB_OVERRIDE) doc["mode"] = "WEB_OVERRIDE";
-    else doc["mode"] = "AUTO_EVADE";
-
+    doc["mode"] = (activeMode == MODE_WEB_OVERRIDE) ? "WEB_OVERRIDE" : "AUTO_EVADE";
     doc["estop"] = motors.isEmergencyStopped();
     doc["stall_estop"] = motors.isStallEstopActive();
+    doc["stall_threshold"] = round(motors.getStallAccelThreshold() * 100.0f) / 100.0f;
+    doc["alarm"] = evasion.isAlarmActive();
     doc["diagonal_enabled"] = sensors.isDiagonalSetEnabled();
     doc["threshold"] = evasion.getThreshold();
     doc["speed"] = motors.getBaseSpeed();
@@ -1294,7 +1338,6 @@ void WebAdminManager::handleApiControl() {
 
     String action = doc["action"] | "stop";
     activeMode = MODE_WEB_OVERRIDE;
-    commPi.setPiOverride(false);
     lastWebCmdTime = millis();
 
     if (action == "forward") motors.forward();
@@ -1324,14 +1367,8 @@ void WebAdminManager::handleApiMode() {
     String m = doc["mode"] | "AUTO_EVADE";
     if (m == "AUTO_EVADE") {
         activeMode = MODE_AUTO_EVADE;
-        commPi.setPiOverride(false);
     } else if (m == "WEB_OVERRIDE") {
         activeMode = MODE_WEB_OVERRIDE;
-        commPi.setPiOverride(false);
-        motors.stop();
-    } else if (m == "PI_OVERRIDE") {
-        activeMode = MODE_PI_OVERRIDE;
-        commPi.setPiOverride(true);
         motors.stop();
     }
 
@@ -1363,6 +1400,11 @@ void WebAdminManager::handleApiConfig() {
         uint16_t onMs = doc["tap_on"] | motors.getTapOnMs();
         uint16_t offMs = doc["tap_off"] | motors.getTapOffMs();
         motors.setTapTiming(onMs, offMs);
+    }
+    if (doc.containsKey("stall_threshold")) {
+        float st = doc["stall_threshold"].as<float>();
+        motors.setStallAccelThreshold(st);
+        Serial.printf("[Config] Stall Accel Threshold set to: %.2f g\n", st);
     }
 
     server.send(200, "application/json", "{\"status\":\"ok\"}");

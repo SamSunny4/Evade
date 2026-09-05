@@ -54,17 +54,25 @@ A high-performance autonomous robot controller firmware for the **ESP32 DevKit V
 | **TURN LEFT** | **OFF** | **ON** | Right motors ON -> Robot pivots/turns Left |
 | **STOP / E-STOP** | **OFF** | **OFF** | Both motors cut off |
 
-### 2. Ultrasonic Sensor Array (4 Directions @ 90° Spacing)
-The 4 sensors are pulsed via two synchronized trigger pins (**GPIO 27** and **GPIO 14 / D14**). Each sensor's echo is measured independently and non-blockingly via hardware interrupts:
+### 2. Ultrasonic Sensor Array (6 Directions: Cardinal & Rear Diagonals)
+The sensors are pulsed via three synchronized trigger pins (**GPIO 27**, **GPIO 14 / D14**, and **GPIO 23 / D23** for next layer). Each sensor's echo is measured independently and non-blockingly via hardware interrupts:
 
 | Sensor Index | Direction | Angle | ESP32 GPIO | Logic Level Note |
 | :--- | :--- | :--- | :--- | :--- |
-| **TRIG 1** | Front & Right | — | **GPIO 27** | Primary 3.3V trigger output |
-| **TRIG 2 (D14)**| Back & Left | — | **GPIO 14** | Secondary 3.3V trigger output |
-| **S0** | Front | 0° | **GPIO 34** | Input Only (1kΩ / 2kΩ divider if 5V) |
-| **S1** | Right | 90° | **GPIO 35** | Input Only (Divider if 5V) |
-| **S2** | Back | 180° | **GPIO 32** | Digital Input |
-| **S3** | Left | 270° | **GPIO 25** | Digital Input |
+| **TRIG 1** | Primary Layer | — | **GPIO 27** | Primary 3.3V trigger output |
+| **TRIG 2 (D14)**| Secondary Layer | — | **GPIO 14** | Secondary 3.3V trigger output |
+| **TRIG 3 (D23)**| Next Layer | — | **GPIO 23** | Next-layer 3.3V trigger output |
+| **S0** | Front | 0° | **GPIO 34** | Set 1 Cardinal (1kΩ / 2kΩ divider if 5V) |
+| **S1** | Right | 90° | **GPIO 35** | Set 1 Cardinal (Divider if 5V) |
+| **S2** | Back | 180° | **GPIO 32** | Set 1 Cardinal Digital Input |
+| **S3** | Left | 270° | **GPIO 25** | Set 1 Cardinal Digital Input |
+| **S4** | Rear-Right | 135° | **GPIO 39 (VN)**| Set 2 Rear Diagonal (Divider if 5V) |
+| **S5** | Rear-Left | 225° | **GPIO 26** | Set 2 Rear Diagonal (Re-assigned from FL) |
+
+> [!NOTE]
+> - **Front-Left (FL)** and **Front-Right (FR)** sensors are disabled in firmware.
+> - The sensor currently wired to the Front-Left pin (**GPIO 26**) is re-assigned as **Rear-Left (225°)**.
+> - Pins **GPIO 36 (VP)** and **GPIO 33** are freed up.
 
 > [!CAUTION]
 > **Voltage Divider on 5V HC-SR04 Echo Lines:**
@@ -78,12 +86,11 @@ The 4 sensors are pulsed via two synchronized trigger pins (**GPIO 27** and **GP
 | **SDA** | **GPIO 21** | I2C Data (400 kHz Fast Mode) |
 | **SCL** | **GPIO 22** | I2C Clock |
 
-### 4. Raspberry Pi UART2 Link
-| Raspberry Pi Pin | ESP32 GPIO | Description |
+### 4. Hardware Alarm / Buzzer (GPIO 4 / D4)
+| Component Pin | ESP32 Pin | Signal / Function |
 | :--- | :--- | :--- |
-| **GPIO 14 (TXD, Pin 8)** | **GPIO 16 (RX2)** | Receives commands from Pi |
-| **GPIO 15 (RXD, Pin 10)**| **GPIO 17 (TX2)** | Sends telemetry/alerts to Pi |
-| **GND (Pin 6 or 9)** | **GND** | Common ground (Critical!) |
+| **Buzzer (+) / LED (+)** | **GPIO 4 (D4)** | Output (HIGH = Alarm ON when bot has no moves available) |
+| **Buzzer (-) / LED (-)** | **GND** | Common Ground |
 
 ---
 
@@ -96,44 +103,19 @@ The 4 sensors are pulsed via two synchronized trigger pins (**GPIO 27** and **GP
 - **Core 1 Task (`loop()`)**:
   - 100% non-blocking interrupt-based ultrasonic scanning.
   - High-rate MPU6050 yaw drift-compensated integration.
-  - Evasion state machine & closed-loop gyro turns.
+  - Evasion state machine & discrete pulse-tapping engine.
   - 2-Channel Relay digital motor switching.
-  - Raspberry Pi UART packet engine.
+  - Hardware Alarm Watchdog.
 
-### 2. Autonomous Evasion Logic
-- **Adjustable Threshold Distance**: Default 25 cm (changeable live from Web or Pi).
-- **Front Blocked**: Reverses until front distance clears the threshold. If rear is also blocked, computes best angle to spin.
-- **Two Sides Blocked**: Calculates the clearance vector field around all 8 sensors to locate the optimal escape corridor, executes a precise gyro-stabilized tank turn, and advances forward.
-- **Trapped (`ALL_SIDES_TRAPPED`)**: When boxed in from all directions, halts motors to prevent collisions and broadcasts `STATUS:ALL_SIDES_TRAPPED` to the Raspberry Pi and Web UI.
-
-### 3. Raspberry Pi Communication Protocol
-Baud rate: **115200**.
-
-#### Outbound Telemetry (ESP32 -> Pi)
-- Heartbeat & status string at 10 Hz:
-  ```
-  STATUS:CLEAR
-  STATUS:OBJECT_IN_FRONT
-  STATUS:OBJECT_BOTH_SIDES
-  STATUS:ALL_SIDES_TRAPPED
-  ```
-- Detailed JSON telemetry:
-  ```json
-  {"status":"OBJECT_IN_FRONT","mode":"AUTO_EVADE","yaw":14.2,"spd":[180,180],"d":[18.5,45.0,120.0,300.0,300.0,300.0,80.0,22.1]}
-  ```
-
-#### Inbound Commands (Pi -> ESP32)
-| Command | Action |
-| :--- | :--- |
-| `CMD:ENABLE_EVADE` | Enables autonomous obstacle evasion mode |
-| `CMD:DISABLE_EVADE`| Disables auto evade; Pi takes over manual motor control |
-| `CMD:MOVE:F` | Move forward |
-| `CMD:MOVE:B` | Move backward |
-| `CMD:MOVE:L` | Spin left |
-| `CMD:MOVE:R` | Spin right |
-| `CMD:MOVE:STOP` | Stop motors |
-| `CMD:TANK:<left>,<right>` | Direct left/right motor PWM (-255 to +255) |
-| `CMD:SPEED:<0-255>` | Adjust default driving speed |
+### 2. Autonomous Evasion & Alarm Logic
+- **Adjustable Threshold Distance**: Default 25 cm (slider tunable up to 100 cm).
+- **Front Blocked**: Discrete inching / tap-rotation toward the more open flank.
+- **Flank Obstacle**: Rotates away from the threat direction.
+- **Trapped (`STATUS_ALL_SIDES_TRAPPED`)**: When no viable moves remain (front and both rotation flanks blocked, or bot boxed in):
+  - All motor relays immediately cut power.
+  - **Hardware Alarm Energized**: `GPIO 4` (D4) drives HIGH to sound an alarm buzzer or strobe an alert LED.
+  - Web Admin UI renders a prominent warning banner: `🚨 NO MOVES AVAILABLE — BOT TRAPPED`.
+  - Once any obstacle moves away and a path opens, the alarm automatically turns OFF (`GPIO 4` goes LOW) and normal evasion resumes.
 
 ---
 

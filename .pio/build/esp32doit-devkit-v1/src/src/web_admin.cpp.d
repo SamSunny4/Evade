@@ -206,7 +206,7 @@
  src/config.h src/sensors.h src/imu.h \
  C:/Users/samsu/.platformio/packages/framework-arduinoespressif32/libraries/Wire/src/Wire.h \
  C:/Users/samsu/.platformio/packages/framework-arduinoespressif32/cores/esp32/esp32-hal.h \
- src/motors.h src/evasion.h src/comm_pi.h \
+ src/motors.h src/evasion.h \
  .pio/libdeps/esp32doit-devkit-v1/ArduinoJson/src/ArduinoJson.h \
  .pio/libdeps/esp32doit-devkit-v1/ArduinoJson/src/ArduinoJson.hpp \
  .pio/libdeps/esp32doit-devkit-v1/ArduinoJson/src/ArduinoJson/Configuration.hpp

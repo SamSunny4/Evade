@@ -32,6 +32,7 @@ public:
     ObstacleStatus getObstacleStatus() const;
     float getTargetYaw() const;
     uint8_t getTapCount() const;
+    bool isAlarmActive() const;
 
 private:
     void executeEvadeStateMachine();
@@ -46,6 +47,7 @@ private:
     float targetYaw;
     uint32_t phaseStartTime;
     uint8_t consecutiveTaps;
+    bool alarmActive;
 };
 
 extern EvasionManager evasion;

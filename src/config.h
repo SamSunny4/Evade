@@ -8,10 +8,11 @@
 // --- Onboard Status Indicator LED ---
 #define PIN_STATUS_LED         2   // Built-in Blue LED on ESP32 DevKit V1
 
-// --- Ultrasonic Sensors (8-Directional Array) ---
-// Dual Trigger Pins pulse sensors (Trig 1: GPIO 27, Trig 2: GPIO 14 / D14)
+// --- Ultrasonic Sensors (6-Directional Array: Cardinal + Rear Diagonals) ---
+// Multi-Trigger Pins pulse sensor layers (Trig 1: GPIO 27, Trig 2: GPIO 14 / D14, Trig 3: GPIO 23 / D23)
 #define PIN_US_TRIG_1          27  // Primary Trigger (GPIO 27)
 #define PIN_US_TRIG_2          14  // Secondary Trigger (GPIO 14 / D14)
+#define PIN_US_TRIG_3          23  // Next-Layer Trigger (GPIO 23 / D23)
 #define PIN_US_TRIG            PIN_US_TRIG_1  // Compatibility alias
 
 // Set 1: Cardinal Directions (0°, 90°, 180°, 270°) - Default Active
@@ -20,13 +21,14 @@
 #define PIN_US_ECHO_2          32  // S2: 180° (Back)
 #define PIN_US_ECHO_3          25  // S3: 270° (Left)
 
-// Set 2: Intercardinal / Diagonal (45°, 135°, 225°, 315°) - Web Toggleable
-#define PIN_US_ECHO_4          36  // S4: 45°  (Front-Right / VP)
-#define PIN_US_ECHO_5          39  // S5: 135° (Back-Right / VN)
-#define PIN_US_ECHO_6          33  // S6: 225° (Back-Left)
-#define PIN_US_ECHO_7          26  // S7: 315° (Front-Left)
+// Set 2: Rear Diagonals (135°, 225°) - Front-Left (FL) and Front-Right (FR) DISABLED
+#define PIN_US_ECHO_4          39  // S4: 135° (Rear-Right / VN)
+#define PIN_US_ECHO_5          26  // S5: 225° (Rear-Left - connected to GPIO 26)
 
-#define NUM_ULTRASONIC_SENSORS 8
+#define NUM_ULTRASONIC_SENSORS 6
+
+// --- Hardware Alarm / Buzzer (Trapped / No Moves Available) ---
+#define PIN_ALARM              4   // GPIO 4 (D4): Energized HIGH when robot has no moves available
 
 // --- 2-Channel Relay Module (Left & Right Motors) ---
 // Relay 1 (Channel 1): Left Motor
@@ -56,12 +58,6 @@
 #define PIN_I2C_SCL            22
 #define MPU6050_I2C_ADDR       0x68
 
-// --- Raspberry Pi Communication (UART2) ---
-#define PIN_PI_RX              16  // Connect to Raspberry Pi TX (Pin 8 / GPIO 14)
-#define PIN_PI_TX              17  // Connect to Raspberry Pi RX (Pin 10 / GPIO 15)
-#define BAUD_PI_SERIAL         115200
-#define PI_HEARTBEAT_TIMEOUT_MS 2000
-
 // --- Default Robot Parameters ---
 #define DEFAULT_THRESHOLD_CM   25.0f
 #define MIN_EVADE_THRESHOLD_CM 10.0f
@@ -74,6 +70,9 @@
 
 // --- Stall Safety Watchdog ---
 #define STALL_ESTOP_DURATION_MS 1000   // 1 second E-Stop when throttle is on without acceleration
+#define DEFAULT_STALL_ACCEL_THRESHOLD 0.06f // Dynamic acceleration threshold in Gs (|a - 1.0g|)
+#define MIN_STALL_ACCEL_THRESHOLD     0.01f
+#define MAX_STALL_ACCEL_THRESHOLD     0.30f
 
 // --- Relay Pulse / Tap Parameters ---
 #define DEFAULT_TAP_ON_MS      60   // Relay energized pulse duration (ms)
@@ -93,7 +92,6 @@
 // --- Control Modes ---
 enum RobotControlMode {
     MODE_AUTO_EVADE = 0,
-    MODE_PI_OVERRIDE,
     MODE_WEB_OVERRIDE
 };
 

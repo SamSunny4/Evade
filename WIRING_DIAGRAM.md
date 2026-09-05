@@ -116,7 +116,7 @@ Wiring the 3rd relay in series before the motor relays gives you a physical powe
 [Battery +] ---> [Relay 3 (Master) COM]
                  [Relay 3 (Master) NO ] ---> [Relay 1 COM] & [Relay 2 COM]
 ```
-* **Control Pin**: Connect Relay 3 `IN` to **`GPIO 4`** or **`GPIO 23`**.
+* **Control Pin**: Connect Relay 3 `IN` to **`GPIO 4`**.
 * **Safety Benefit**: Cutting Relay 3 kills all motor power immediately during emergencies or if the software watchdog triggers.
 
 ### Option B: High-Power Searchlight / Siren / Actuator
@@ -125,35 +125,40 @@ Wiring the 3rd relay in series before the motor relays gives you a physical powe
                   [Relay 3 NO ] ---> [Light / Siren / Solenoid (+)]
 [Light / Siren / Solenoid (-)] ---> [Battery / GND]
 ```
-* **Control Pin**: Connect Relay 3 `IN` to **`GPIO 4`** or **`GPIO 23`**.
+* **Control Pin**: Connect Relay 3 `IN` to **`GPIO 4`**.
 
 ---
 
-## 5. Ultrasonic Sensor Array (8 Directions: Cardinal & Diagonal Sets)
+## 5. Ultrasonic Sensor Array (6 Directions: Cardinal & Rear Diagonals)
 
-The robot supports up to **8 ultrasonic sensors** arranged around the chassis in two modular sets:
+The robot supports **6 ultrasonic sensors** arranged around the chassis:
 * **Set 1: Cardinal Set (Default Active)**: Front (0°), Right (90°), Back (180°), Left (270°).
-* **Set 2: Diagonal Set (Web Toggleable)**: Front-Right (45°), Back-Right (135°), Back-Left (225°), Front-Left (315°).
+* **Set 2: Rear Diagonal Set (Web Toggleable)**: Rear-Right (135°), Rear-Left (225°).
+*(Note: Front-Left and Front-Right are **disabled**).*
 
-### Dual Trigger Lines (GPIO 27 & GPIO 14 / D14)
-The sensors are triggered via two dedicated trigger lines pulsed simultaneously:
-* **Trigger 1 (ESP32 GPIO 27)**: Primary Trigger for Set 1 (S0..S3).
-* **Trigger 2 (ESP32 GPIO 14 / D14)**: Secondary Trigger for Set 2 (S4..S7).
-*(Both lines pulse simultaneously in firmware, distributing electrical drive current).*
+### Triple Trigger Lines (GPIO 27, GPIO 14 / D14, & GPIO 23 / D23)
+The sensors are triggered via dedicated trigger lines pulsed simultaneously (10µs pulse):
+* **Trigger 1 (ESP32 GPIO 27)**: Primary Trigger for Set 1 (S0..S3 Cardinal).
+* **Trigger 2 (ESP32 GPIO 14 / D14)**: Secondary Trigger for Set 2 (S4..S5 Rear Diagonals).
+* **Trigger 3 (ESP32 GPIO 23 / D23)**: Expansion Trigger for next-layer / auxiliary ultrasonic sensors.
+*(All three lines pulse synchronously in firmware, preventing pin overdrive and distributing drive current).*
 
-### Dedicated Echo Lines (All 8 Sensors)
+### Dedicated Echo Lines (6 Sensors)
 Each sensor returns its echo pulse to a dedicated ESP32 input pin:
 
-| Set | Sensor Index | Direction Angle | ESP32 GPIO | Logic Level Handling |
-| :--- | :--- | :--- | :--- | :--- |
-| **Set 1 (Cardinal)** | **S0** (Front) | 0° | **GPIO 34** | Input Only (1kΩ / 2kΩ divider if 5V) |
-| **Set 1 (Cardinal)** | **S1** (Right) | 90° | **GPIO 35** | Input Only (1kΩ / 2kΩ divider if 5V) |
-| **Set 1 (Cardinal)** | **S2** (Back) | 180° | **GPIO 32** | Digital Input |
-| **Set 1 (Cardinal)** | **S3** (Left) | 270° | **GPIO 25** | Digital Input |
-| **Set 2 (Diagonal)** | **S4** (Front-Right) | 45° | **GPIO 36 (VP)**| Input Only (1kΩ / 2kΩ divider if 5V) |
-| **Set 2 (Diagonal)** | **S5** (Back-Right) | 135° | **GPIO 39 (VN)**| Input Only (1kΩ / 2kΩ divider if 5V) |
-| **Set 2 (Diagonal)** | **S6** (Back-Left) | 225° | **GPIO 33** | Digital Input |
-| **Set 2 (Diagonal)** | **S7** (Front-Left) | 315° | **GPIO 26** | Digital Input |
+| Set | Sensor Index | Direction Angle | ESP32 GPIO | Logic Level Handling | Notes |
+| :--- | :--- | :--- | :--- | :--- | :--- |
+| **Set 1 (Cardinal)** | **S0** (Front) | 0° | **GPIO 34** | Input Only (1kΩ / 2kΩ divider if 5V) | Front obstacle detection |
+| **Set 1 (Cardinal)** | **S1** (Right) | 90° | **GPIO 35** | Input Only (1kΩ / 2kΩ divider if 5V) | Right flank |
+| **Set 1 (Cardinal)** | **S2** (Back) | 180° | **GPIO 32** | Digital Input | Rear flank |
+| **Set 1 (Cardinal)** | **S3** (Left) | 270° | **GPIO 25** | Digital Input | Left flank |
+| **Set 2 (Rear Diag)** | **S4** (Rear-Right)| 135° | **GPIO 39 (VN)**| Input Only (1kΩ / 2kΩ divider if 5V) | Rear-right protection |
+| **Set 2 (Rear Diag)** | **S5** (Rear-Left) | 225° | **GPIO 26** | Digital Input | Re-assigned from FL |
+
+> [!NOTE]
+> - **Front-Left (FL)** and **Front-Right (FR)** are disabled in firmware.
+> - The sensor previously connected as Front-Left (**GPIO 26**) is now mapped as **Rear-Left (225°)**.
+> - Pins **GPIO 36 (VP)** and **GPIO 33** are freed up.
 
 ### Voltage Divider on 5V HC-SR04 Echo Pins
 Standard HC-SR04 sensors output a **5V Echo pulse**, but the ESP32 is **3.3V tolerant only**. Use this simple resistor network on each Echo line:
@@ -163,7 +168,7 @@ Sensor ECHO Pin (5V)
        |
      [ 1kΩ Resistor ]
        |
-       +-------------------> To ESP32 GPIO (e.g. GPIO 34, 35, 36, 39)
+       +-------------------> To ESP32 GPIO (e.g. GPIO 34, 35, 39)
        |
      [ 2kΩ Resistor ]
        |
@@ -188,18 +193,17 @@ The MPU6050 provides real-time gyro yaw integration and dynamic linear accelerat
 
 ---
 
-## 7. Raspberry Pi UART Interconnection
+## 7. Hardware Alarm / Buzzer (GPIO 4)
 
-For autonomous telemetry, visualizer streaming, and mission override commands:
+When autonomous evasion determines that **no more moves are available** (front and both rotation flanks blocked, or bot is trapped), the ESP32 energizes **GPIO 4 (D4)** to drive an audible alarm buzzer or warning strobe.
 
-| Raspberry Pi 4/5 Pin | ESP32 Pin | Signal / Notes |
-| :--- | :--- | :--- |
-| **Pin 8 (GPIO 14 - TXD)** | **GPIO 16 (RX2)** | Pi commands transmitted to ESP32 |
-| **Pin 10 (GPIO 15 - RXD)**| **GPIO 17 (TX2)** | ESP32 telemetry sent to Pi |
-| **Pin 6 or Pin 9 (GND)** | **GND** | **Critical**: Shared Ground reference |
+```
+[ ESP32 GPIO 4 (D4) ] ---> [ Active Buzzer (+) / Alarm LED Anode (+) ]
+[ ESP32 GND         ] ---> [ Active Buzzer (-) / Alarm LED Cathode (-) ]
+```
 
-> [!WARNING]
-> Do NOT connect the Raspberry Pi's 5V/3.3V power pins to the ESP32's 3.3V pin. Only share the **GND**, **TX**, and **RX** lines.
+- **Logic**: Driven **HIGH** (3.3V) when trapped / no moves available; driven **LOW** (0V) when an open path is detected.
+- **Standalone Operation**: Raspberry Pi UART communication has been removed; the robot is fully autonomous and remotely managed via Wi-Fi Web Admin.
 
 ---
 
@@ -208,23 +212,24 @@ For autonomous telemetry, visualizer streaming, and mission override commands:
 | ESP32 GPIO | Direction | Connected Peripheral | Voltage | Notes |
 | :--- | :--- | :--- | :--- | :--- |
 | **GPIO 2** | Output | Built-in Status LED | 3.3V | Blinks when WiFi connected, OFF on disconnect/E-Stop |
+| **GPIO 4** | Output | **Hardware Alarm / Buzzer (D4)** | 3.3V | **HIGH when trapped / no moves available** |
 | **GPIO 18** | Output | Relay 1 (Left Motors) | 5V Opto | Active LOW |
 | **GPIO 19** | Output | Relay 2 (Right Motors) | 5V Opto | Active LOW |
-| **GPIO 4** | Output | *(Optional)* Relay 3 (Master / Aux) | 5V Opto | Safe general purpose I/O |
 | **GPIO 27** | Output | Ultrasonic Trigger 1 | 3.3V/5V | Primary trigger (S0..S3 Cardinal) |
-| **GPIO 14** | Output | Ultrasonic Trigger 2 (D14) | 3.3V/5V | Secondary trigger (S4..S7 Diagonal) |
+| **GPIO 14** | Output | Ultrasonic Trigger 2 (D14) | 3.3V/5V | Secondary trigger (S4..S5 Rear Diagonals) |
+| **GPIO 23** | Output | Ultrasonic Trigger 3 (D23) | 3.3V/5V | Expansion trigger (Next-layer ultrasonic array) |
 | **GPIO 34** | Input | Ultrasonic S0 Echo (Front - 0°) | 3.3V Max | Input-only pin (use divider if 5V) |
 | **GPIO 35** | Input | Ultrasonic S1 Echo (Right - 90°) | 3.3V Max | Input-only pin (use divider if 5V) |
 | **GPIO 32** | Input | Ultrasonic S2 Echo (Back - 180°)| 3.3V Max | Digital Input |
 | **GPIO 25** | Input | Ultrasonic S3 Echo (Left - 270°)| 3.3V Max | Digital Input |
-| **GPIO 36 (VP)**| Input | Ultrasonic S4 Echo (Front-Right - 45°)| 3.3V Max | Set 2 Diagonal (use divider if 5V) |
-| **GPIO 39 (VN)**| Input | Ultrasonic S5 Echo (Back-Right - 135°)| 3.3V Max | Set 2 Diagonal (use divider if 5V) |
-| **GPIO 33** | Input | Ultrasonic S6 Echo (Back-Left - 225°)| 3.3V Max | Set 2 Diagonal |
-| **GPIO 26** | Input | Ultrasonic S7 Echo (Front-Left - 315°)| 3.3V Max | Set 2 Diagonal |
+| **GPIO 39 (VN)**| Input | Ultrasonic S4 Echo (Rear-Right - 135°)| 3.3V Max | Rear Diagonal (use divider if 5V) |
+| **GPIO 26** | Input | Ultrasonic S5 Echo (Rear-Left - 225°)| 3.3V Max | **Re-assigned from FL to Rear-Left** |
 | **GPIO 21** | I/O | MPU6050 SDA | 3.3V | I2C Data (400 kHz) |
 | **GPIO 22** | Output | MPU6050 SCL | 3.3V | I2C Clock |
-| **GPIO 16** | Input | Raspberry Pi TX (UART2 RX) | 3.3V | 115200 baud |
-| **GPIO 17** | Output | Raspberry Pi RX (UART2 TX) | 3.3V | 115200 baud |
+| **GPIO 16** | *Unused* | *Freed up* (Formerly Pi RX) | 3.3V | General purpose I/O |
+| **GPIO 17** | *Unused* | *Freed up* (Formerly Pi TX) | 3.3V | General purpose I/O |
+| **GPIO 33** | *Unused* | *Freed up* (Formerly BL) | 3.3V | General purpose I/O |
+| **GPIO 36 (VP)**| *Unused* | *Freed up* (Formerly FR) | 3.3V | Input-only pin |
 
 ---
 

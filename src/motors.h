@@ -38,6 +38,8 @@ public:
     void checkStallWatchdog(float dynamicAccel, float gyroRateZ);
     void triggerStallEstop();
     bool isStallEstopActive() const;
+    void setStallAccelThreshold(float g);
+    float getStallAccelThreshold() const;
 
     // Dynamic max speed configuration
     void setBaseSpeed(uint8_t speed);
@@ -74,6 +76,7 @@ private:
     uint32_t stallEstopEndTime;
     uint32_t throttleOnStartTime;
     uint32_t lastMotionTime;
+    float stallAccelThreshold;
 
     // Tap pulse engine variables
     bool tapModeActive;

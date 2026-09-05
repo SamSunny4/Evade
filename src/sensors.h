@@ -2,18 +2,16 @@
 #include <Arduino.h>
 #include "config.h"
 
-// Sector Angles for the Ultrasonic Sensors:
+// Sector Angles for the Ultrasonic Sensors (6 Directions):
 // Set 1 (Cardinal):
 // Index 0: 0°   (Front)
 // Index 1: 90°  (Right)
 // Index 2: 180° (Back)
 // Index 3: 270° (Left / -90°)
 //
-// Set 2 (Intercardinal / Diagonal - Toggleable):
-// Index 4: 45°  (Front-Right)
-// Index 5: 135° (Back-Right)
-// Index 6: 225° (Back-Left / -135°)
-// Index 7: 315° (Front-Left / -45°)
+// Set 2 (Rear Diagonals - FL and FR DISABLED):
+// Index 4: 135° (Rear-Right / 135°)
+// Index 5: 225° (Rear-Left / -135° - connected to GPIO 26)
 
 class SensorsManager {
 public:

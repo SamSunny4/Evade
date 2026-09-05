@@ -12,6 +12,7 @@ MotorsManager::MotorsManager()
       stallEstopEndTime(0),
       throttleOnStartTime(0),
       lastMotionTime(0),
+      stallAccelThreshold(DEFAULT_STALL_ACCEL_THRESHOLD),
       tapModeActive(false),
       inTapPulse(false),
       singleTapOnly(false),
@@ -36,6 +37,7 @@ void MotorsManager::init() {
     stallEstopEndTime = 0;
     throttleOnStartTime = 0;
     lastMotionTime = 0;
+    stallAccelThreshold = DEFAULT_STALL_ACCEL_THRESHOLD;
     setTapSpeed(DEFAULT_SPEED);
 
     stop();
@@ -283,6 +285,14 @@ bool MotorsManager::isStallEstopActive() const {
     return stallEstopActive;
 }
 
+void MotorsManager::setStallAccelThreshold(float g) {
+    stallAccelThreshold = constrain(g, MIN_STALL_ACCEL_THRESHOLD, MAX_STALL_ACCEL_THRESHOLD);
+}
+
+float MotorsManager::getStallAccelThreshold() const {
+    return stallAccelThreshold;
+}
+
 void MotorsManager::checkStallWatchdog(float dynamicAccel, float gyroRateZ) {
     uint32_t now = millis();
 
@@ -315,8 +325,8 @@ void MotorsManager::checkStallWatchdog(float dynamicAccel, float gyroRateZ) {
         lastMotionTime = now;
     }
 
-    // 3. Motion detection: IMU dynamic linear acceleration (>0.06g) or gyro turn rate (>4.0 deg/s)
-    bool hasMotion = (dynamicAccel > 0.06f) || (fabs(gyroRateZ) > 4.0f);
+    // 3. Motion detection: IMU dynamic linear acceleration (>stallAccelThreshold) or gyro turn rate (>4.0 deg/s)
+    bool hasMotion = (dynamicAccel > stallAccelThreshold) || (fabs(gyroRateZ) > 4.0f);
 
     if (hasMotion) {
         lastMotionTime = now;

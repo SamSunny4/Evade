@@ -20,7 +20,6 @@
 #include "src/imu.h"
 #include "src/motors.h"
 #include "src/evasion.h"
-#include "src/comm_pi.h"
 #include "src/web_admin.h"
 
 TaskHandle_t NetworkTaskHandle = NULL;
@@ -43,7 +42,6 @@ void setup() {
     motors.init();
     sensors.init();
     imu.init();
-    commPi.init();
     evasion.init();
 
     xTaskCreatePinnedToCore(
@@ -73,7 +71,7 @@ void printSerialMonitorTelemetry(RobotControlMode mode, ObstacleStatus status) {
         else if (status == STATUS_OBJECT_ON_RIGHT)   stStr = "OBJECT_ON_RIGHT";
         else if (status == STATUS_OBJECT_IN_REAR)    stStr = "OBJECT_IN_REAR";
         else if (status == STATUS_OBJECT_BOTH_SIDES) stStr = "OBJECT_BOTH_SIDES";
-        else if (status == STATUS_ALL_SIDES_TRAPPED) stStr = "ALL_SIDES_TRAPPED";
+        else if (status == STATUS_ALL_SIDES_TRAPPED) stStr = "ALL_SIDES_TRAPPED (ALARM ON)";
 
         Serial.printf("\n>>> [ALERT: STATUS CHANGED] >>> %s (Threshold: %.1f cm) <<<\n", stStr, evasion.getThreshold());
     }
@@ -85,24 +83,25 @@ void printSerialMonitorTelemetry(RobotControlMode mode, ObstacleStatus status) {
 
     const char* modeStr = "AUTO_EVADE";
     if (motors.isEmergencyStopped()) modeStr = "EMERG_STOP ";
-    else if (mode == MODE_PI_OVERRIDE) modeStr = "PI_OVERRIDE ";
     else if (mode == MODE_WEB_OVERRIDE) modeStr = "WEB_OVERRIDE";
+
+    const char* alarmStr = evasion.isAlarmActive() ? " [🚨ALARM ON]" : "";
 
     int16_t lSpd, rSpd;
     motors.getSpeeds(lSpd, rSpd);
 
     if (sensors.isDiagonalSetEnabled()) {
-        Serial.printf("[YAW:%+6.1f°] [%s] [MOT:L=%+4d R=%+4d] | F:%.0f R:%.0f B:%.0f L:%.0f | FR:%.0f BR:%.0f BL:%.0f FL:%.0f\n",
+        Serial.printf("[YAW:%+6.1f°] [%s%s] [MOT:L=%+4d R=%+4d] | F:%.0f R:%.0f B:%.0f L:%.0f | RR:%.0f RL:%.0f\n",
             imu.getYaw(),
-            modeStr,
+            modeStr, alarmStr,
             lSpd, rSpd,
             sensors.getDistance(0), sensors.getDistance(1), sensors.getDistance(2), sensors.getDistance(3),
-            sensors.getDistance(4), sensors.getDistance(5), sensors.getDistance(6), sensors.getDistance(7)
+            sensors.getDistance(4), sensors.getDistance(5)
         );
     } else {
-        Serial.printf("[YAW:%+6.1f°] [%s] [MOT:L=%+4d R=%+4d] | S0(F):%5.1f S1(R):%5.1f S2(B):%5.1f S3(L):%5.1f\n",
+        Serial.printf("[YAW:%+6.1f°] [%s%s] [MOT:L=%+4d R=%+4d] | S0(F):%5.1f S1(R):%5.1f S2(B):%5.1f S3(L):%5.1f\n",
             imu.getYaw(),
-            modeStr,
+            modeStr, alarmStr,
             lSpd, rSpd,
             sensors.getDistance(0),
             sensors.getDistance(1),
@@ -115,7 +114,6 @@ void printSerialMonitorTelemetry(RobotControlMode mode, ObstacleStatus status) {
 void loop() {
     imu.update();
     sensors.update();
-    commPi.update();
     motors.update();
 
     // Stall Safety Watchdog: throttle commanded ON but no acceleration triggers 1s E-Stop
@@ -124,8 +122,6 @@ void loop() {
     RobotControlMode activeMode;
     if (webAdmin.isWebOverrideActive()) {
         activeMode = MODE_WEB_OVERRIDE;
-    } else if (commPi.isPiOverrideActive()) {
-        activeMode = MODE_PI_OVERRIDE;
     } else {
         activeMode = MODE_AUTO_EVADE;
     }
@@ -138,10 +134,7 @@ void loop() {
 
     ObstacleStatus status = evasion.getObstacleStatus();
 
-    // 1. Send telemetry to Raspberry Pi over UART2 (115200 baud)
-    commPi.sendTelemetry(status, imu.getYaw(), activeMode);
-
-    // 2. Print live dashboard to USB Serial Monitor
+    // Print live dashboard to USB Serial Monitor
     printSerialMonitorTelemetry(activeMode, status);
 
     delayMicroseconds(500);
