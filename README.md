@@ -1,3 +1,5 @@
+<img width="1280" height="720" alt="EVade" src="EVade.jpeg" />
+
 # EVade - ESP32 Autonomous 360° Evasion Robot & Web Portal
 
 A high-performance autonomous robot controller firmware for the **ESP32 DevKit V1** with **360° ultrasonic obstacle detection**, an **MPU6050 6-DOF IMU orientation & dead-reckoning system**, a **2-channel relay module (discrete pulse-tap tank steering)**, **Hardware Panic Siren on GPIO 4 (D4)**, **WiFi Disconnect Emergency Stop Safety**, and an embedded **Cybernetic Web Admin Portal** with wireless **ArduinoOTA** programming.
