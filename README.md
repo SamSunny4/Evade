@@ -1,6 +1,6 @@
-# TinkerHub CyberBot - ESP32 Autonomous Evade Robot
+# EVade - ESP32 Autonomous 360° Evasion Robot & Web Portal
 
-A high-performance autonomous robot controller firmware for the **ESP32 DevKit V1** with **4-directional orthogonal ultrasonic obstacle detection (90° spacing)**, an **MPU6050 gyro orientation system**, a **2-channel relay module (digital tank steering)**, **WiFi Disconnect Emergency Stop Safety**, **bi-directional Raspberry Pi UART telemetry**, and an embedded **Cyberpunk Web Admin Portal** with wireless **ArduinoOTA** programming.
+A high-performance autonomous robot controller firmware for the **ESP32 DevKit V1** with **360° ultrasonic obstacle detection**, an **MPU6050 6-DOF IMU orientation & dead-reckoning system**, a **2-channel relay module (discrete pulse-tap tank steering)**, **Hardware Panic Siren on GPIO 4 (D4)**, **WiFi Disconnect Emergency Stop Safety**, and an embedded **Cybernetic Web Admin Portal** with wireless **ArduinoOTA** programming.
 
 ---
 
