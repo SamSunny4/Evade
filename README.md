@@ -1,8 +1,31 @@
 <img width="1280" height="720" alt="EVade" src="EVade.jpeg" />
 
-# EVade - ESP32 Autonomous 360° Evasion Robot & Web Portal
+# EVade - The Autonomous Anti-Social Runaway Stool
+### TinkerHub Useless Projects 3.0 • Team OnlyFlaws
 
-A high-performance autonomous robot controller firmware for the **ESP32 DevKit V1** with **360° ultrasonic obstacle detection**, an **MPU6050 6-DOF IMU orientation & dead-reckoning system**, a **2-channel relay module (discrete pulse-tap tank steering)**, **Self-Defense Taser Module on GPIO 4 (D4)**, **WiFi Disconnect Emergency Stop Safety**, and an embedded **Cybernetic Web Admin Portal** with wireless **ArduinoOTA** programming.
+**Team Members**:
+- **Sam Sunny** - Muthoot Institute of Technology and Science
+- **John Varghese Nettady** - Muthoot Institute of Technology and Science
+
+An autonomous motorized runaway stool for the **ESP32 DevKit V1** that aggressively refuses to be sat on. Equipped with **360° hex-directional ultrasonic obstacle detection**, an **MPU6050 6-DOF IMU orientation & dead-reckoning system**, **discrete pulse-tap dual-relay motor steering**, an active **Self-Defense Taser Module on GPIO 4 (D4)**, **WiFi Disconnect Emergency Stop Safety**, and an embedded **Cybernetic Web Admin Portal** with wireless **ArduinoOTA** programming.
+
+---
+
+## Hardware Build & Component Gallery
+
+<p align="center">
+  <img src="EVade.jpeg" alt="EVade Autonomous Runaway Stool Prototype" width="700" style="border-radius: 12px; box-shadow: 0 4px 16px rgba(0,0,0,0.15);" />
+  <br>
+  <em><b>EVade Full Hardware Prototype</b>: Autonomous runaway stool with 360-degree ultrasonic echolocation, MPU6050 IMU, dual-relay pulse-tapping engine, and GPIO 4 self-defense Taser module.</em>
+</p>
+
+| Component | Hardware Module & Subsystem | Function in EVade |
+| :---: | :--- | :--- |
+| <img src="esp.jpg" width="220" alt="ESP32 DevKit V1" style="border-radius: 8px;" /> | **DOIT ESP32 DevKit V1**<br>Dual-Core Xtensa LX6 @ 240MHz | Main control unit. Core 0 hosts the cybernetic REST Web Admin & OTA server; Core 1 executes the 1000Hz real-time evasion state machine and interrupt-driven sonar triggers. |
+| <img src="gyro.jpg" width="220" alt="MPU6050 6-Axis IMU" style="border-radius: 8px;" /> | **MPU6050 6-DOF IMU**<br>I2C Fast Mode @ 400kHz | High-speed gyroscopic yaw integration and linear accelerometer tracking. Computes real-time heading, 2D dead-reckoning (X, Y) coordinates, and triggers the accelerometer stall watchdog. |
+| <img src="motors.jpg" width="220" alt="Relay and DC Motors" style="border-radius: 8px;" /> | **Dual-Relay & DC Motor Actuation**<br>2-Channel 5V Optocoupled Relay | Discrete pulse-tapping locomotion engine. Pulses drive relays for 60ms with 110ms resting pauses to enable measured evasion without motor vibration interfering with sonar readings. |
+| <img src="tire.jpg" width="220" alt="Drive Tire and Wheel" style="border-radius: 8px;" /> | **High-Traction Drive Tire & Wheel Assembly**<br>Direct Drive Drivetrain | Rugged high-friction rubberized drive wheels and caster balance pods allowing the stool to rapidly dash away when approached from any direction. |
+| <img src="ult%20sensor.jpg" width="220" alt="Ultrasonic Sensor" style="border-radius: 8px;" /> | **HC-SR04 Ultrasonic Sonar Array**<br>Multi-Layer Trigger Network | 6-transceiver echolocation array firing synchronous 10µs pulses across GPIO 27, 14, and 23. Continuously sweeps a 360-degree perimeter to detect approaching intruders within 25–100cm. |
 
 ---
 
@@ -180,3 +203,9 @@ To test, monitor, and visualize the robot's real-time actions and ultrasonic rad
    - **Action & Status Event Log**: Timestamped record of every obstacle trigger and state change.
    - **Raw USB Console**: Real-time stream of raw lines emitted by the ESP32.
    - **Simulation Mode**: Built-in simulator toggle to preview the visualizer offline without hardware.
+
+---
+
+## Team Contributions
+- **Sam Sunny** (Muthoot Institute of Technology and Science): System architecture, FreeRTOS dual-core firmware development, discrete relay pulse-tapping engine, MPU6050 kinematic dead-reckoning integration, web admin portal & canvas radar development.
+- **John Varghese Nettady** (Muthoot Institute of Technology and Science): Hardware stool chassis fabrication, ultrasonic sensor array mounting, high-torque motor drive & tire assembly, voltage divider wiring harness, and hardware testing.
